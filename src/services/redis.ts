@@ -1,6 +1,6 @@
 import { createClient, RedisClientType } from 'redis';
 import { config } from '../config/env';
-import { RevokedToken } from '../types';
+import { RevokedToken, JWKS } from '../types';
 
 /**
  * Redis service for token revocation and blocklist management
@@ -183,6 +183,73 @@ export class RedisService {
          await this.client.del(`pkce:${sessionId}`);
       } catch (error) {
          console.error('Failed to delete PKCE session:', error);
+      }
+   }
+
+   /**
+    * Cache JWKS (JSON Web Key Set) in Redis
+    */
+   async cacheJWKS(jwks: JWKS, ttl: number = 3600): Promise<void> {
+      try {
+         await this.client.setEx('jwks:current', ttl, JSON.stringify(jwks));
+         console.log('JWKS cached successfully');
+      } catch (error) {
+         console.error('Failed to cache JWKS:', error);
+         throw new Error('Failed to cache JWKS');
+      }
+   }
+
+   /**
+    * Get cached JWKS from Redis
+    */
+   async getCachedJWKS(): Promise<JWKS | null> {
+      try {
+         const result = await this.client.get('jwks:current');
+         if (!result) {
+            return null;
+         }
+         return JSON.parse(result) as JWKS;
+      } catch (error) {
+         console.error('Failed to get cached JWKS:', error);
+         return null;
+      }
+   }
+
+   /**
+    * Invalidate JWKS cache
+    */
+   async invalidateJWKSCache(): Promise<void> {
+      try {
+         await this.client.del('jwks:current');
+         console.log('JWKS cache invalidated');
+      } catch (error) {
+         console.error('Failed to invalidate JWKS cache:', error);
+      }
+   }
+
+   /**
+    * Store key hash for key rotation detection
+    */
+   async storeKeyHash(keyHash: string): Promise<void> {
+      try {
+         // Store without TTL (persistent until key rotation)
+         await this.client.set('jwks:key_hash', keyHash);
+         console.log('Key hash stored successfully');
+      } catch (error) {
+         console.error('Failed to store key hash:', error);
+      }
+   }
+
+   /**
+    * Get stored key hash
+    */
+   async getKeyHash(): Promise<string | null> {
+      try {
+         const result = await this.client.get('jwks:key_hash');
+         return result;
+      } catch (error) {
+         console.error('Failed to get key hash:', error);
+         return null;
       }
    }
 

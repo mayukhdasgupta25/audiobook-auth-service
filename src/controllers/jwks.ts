@@ -1,17 +1,77 @@
 import { Request, Response } from 'express';
+import crypto from 'crypto';
 import { CryptoUtils } from '../utils/crypto';
 import { config } from '../config/env';
+import { redisService } from '../services/redis';
 
 /**
  * JWKS controller for providing public keys for JWT verification
  */
 export class JWKSController {
    /**
-    * Get JWKS (JSON Web Key Set)
+    * Get JWKS (JSON Web Key Set) with Redis caching and automatic key rotation detection
     */
    async getJWKS(_req: Request, res: Response): Promise<void> {
       try {
-         const jwks = CryptoUtils.generateJWKS(config.JWT_PUBLIC_KEY, config.JWT_KEY_ID);
+         // Generate hash of current JWT public key for key rotation detection
+         const currentKeyHash = crypto
+            .createHash('sha256')
+            .update(config.JWT_PUBLIC_KEY)
+            .digest('hex');
+
+         // Check if keys have been rotated
+         let storedKeyHash: string | null = null;
+         try {
+            storedKeyHash = await redisService.getKeyHash();
+         } catch (error) {
+            console.warn('Failed to get key hash from Redis, continuing without cache:', error);
+         }
+
+         // If key hash has changed, invalidate the cache
+         if (storedKeyHash && storedKeyHash !== currentKeyHash) {
+            console.log('Key rotation detected, invalidating JWKS cache');
+            try {
+               await redisService.invalidateJWKSCache();
+            } catch (error) {
+               console.error('Failed to invalidate cache:', error);
+            }
+         }
+
+         // Try to get cached JWKS
+         let jwks = null;
+         try {
+            jwks = await redisService.getCachedJWKS();
+            if (jwks) {
+               console.log('JWKS cache hit');
+            } else {
+               console.log('JWKS cache miss');
+            }
+         } catch (error) {
+            console.warn('Failed to get cached JWKS, generating new one:', error);
+         }
+
+         // If not cached, generate new JWKS
+         if (!jwks) {
+            jwks = CryptoUtils.generateJWKS(config.JWT_PUBLIC_KEY, config.JWT_KEY_ID);
+
+            // Cache the JWKS for 1 hour
+            try {
+               await redisService.cacheJWKS(jwks, 3600);
+               console.log('JWKS cached successfully');
+            } catch (error) {
+               console.warn('Failed to cache JWKS, continuing without cache:', error);
+            }
+         }
+
+         // Store current key hash if not stored or different
+         if (!storedKeyHash || storedKeyHash !== currentKeyHash) {
+            try {
+               await redisService.storeKeyHash(currentKeyHash);
+               console.log('Key hash updated');
+            } catch (error) {
+               console.warn('Failed to store key hash:', error);
+            }
+         }
 
          // Set appropriate headers
          res.setHeader('Content-Type', 'application/json');
