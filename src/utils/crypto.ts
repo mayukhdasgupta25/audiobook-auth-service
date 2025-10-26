@@ -169,17 +169,16 @@ export class CryptoUtils {
     * Convert PEM public key to JWK format
     */
    static pemToJWK(publicKeyPem: string, kid: string): JWK {
-      const publicKey = forge.pki.publicKeyFromPem(publicKeyPem);
-      const n = forge.util.encode64(publicKey.n.toString(16));
-      const e = forge.util.encode64(publicKey.e.toString(16));
+      const publicKey = crypto.createPublicKey(publicKeyPem);
+      const jwk = publicKey.export({ format: 'jwk' });
 
       return {
          kid,
          kty: 'RSA',
          use: 'sig',
          alg: 'RS256',
-         n,
-         e,
+         n: jwk.n || '',
+         e: jwk.e || '',
       };
    }
 

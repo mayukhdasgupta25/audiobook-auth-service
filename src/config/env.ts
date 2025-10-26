@@ -31,7 +31,7 @@ export const config = {
    JWT_REFRESH_TOKEN_EXPIRY: '7d',
 
    // CORS Configuration
-   CORS_ORIGINS: process.env['CORS_ORIGINS']?.split(',') || ['http://localhost:3000'],
+   CORS_ORIGINS: process.env['CORS_ORIGINS']?.split(',') || ['http://localhost:3000', 'http://localhost:8081', 'http://localhost:8082'],
 
    // Rate Limiting
    RATE_LIMIT_WINDOW_MS: parseInt(process.env['RATE_LIMIT_WINDOW_MS'] || '900000', 10),
