@@ -192,7 +192,6 @@ export class RedisService {
    async cacheJWKS(jwks: JWKS, ttl: number = 3600): Promise<void> {
       try {
          await this.client.setEx('jwks:current', ttl, JSON.stringify(jwks));
-         console.log('JWKS cached successfully');
       } catch (error) {
          console.error('Failed to cache JWKS:', error);
          throw new Error('Failed to cache JWKS');
