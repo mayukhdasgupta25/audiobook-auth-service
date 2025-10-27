@@ -1,5 +1,5 @@
 // Test setup file
-import { PrismaClient } from '@prisma/client';
+import { CryptoUtils } from '../src/utils/crypto';
 
 // Mock Prisma client for tests
 jest.mock('@prisma/client', () => ({
@@ -27,6 +27,10 @@ jest.mock('@prisma/client', () => ({
          update: jest.fn(),
       },
    })),
+   Role: {
+      USER: 'USER',
+      ADMIN: 'ADMIN',
+   },
 }));
 
 // Mock Redis service
@@ -44,11 +48,14 @@ jest.mock('../src/services/redis', () => ({
    },
 }));
 
+// Generate RSA key pair for JWT testing
+const testKeys = CryptoUtils.generateRSAKeyPair();
+
 // Set test environment
-process.env.NODE_ENV = 'test';
-process.env.DATABASE_URL = 'postgresql://test:test@localhost:5432/test_auth_service';
-process.env.REDIS_URL = 'redis://localhost:6379';
-process.env.JWT_PRIVATE_KEY = '-----BEGIN PRIVATE KEY-----\nMOCK_PRIVATE_KEY\n-----END PRIVATE KEY-----';
-process.env.JWT_PUBLIC_KEY = '-----BEGIN PUBLIC KEY-----\nMOCK_PUBLIC_KEY\n-----END PUBLIC KEY-----';
-process.env.JWT_KEY_ID = 'test-key-1';
-process.env.JWT_ISSUER = 'test-auth-service';
+process.env['NODE_ENV'] = 'test';
+process.env['DATABASE_URL'] = 'postgresql://test:test@localhost:5432/test_auth_service';
+process.env['REDIS_URL'] = 'redis://localhost:6379';
+process.env['JWT_PRIVATE_KEY'] = testKeys.privateKey;
+process.env['JWT_PUBLIC_KEY'] = testKeys.publicKey;
+process.env['JWT_KEY_ID'] = 'test-key-1';
+process.env['JWT_ISSUER'] = 'test-auth-service';
