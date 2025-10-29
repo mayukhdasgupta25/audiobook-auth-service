@@ -37,6 +37,27 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Generate test JWT keys
+        id: generate-keys
+        run: |
+          node << 'EOF'
+          const forge = require('node-forge');
+          const keypair = forge.pki.rsa.generateKeyPair(2048);
+          const privateKey = forge.pki.privateKeyToPem(keypair.privateKey);
+          const publicKey = forge.pki.publicKeyToPem(keypair.publicKey);
+
+          // Use heredoc delimiter to handle multi-line keys
+          const fs = require('fs');
+          fs.writeFileSync('jwt-private.txt', privateKey);
+          fs.writeFileSync('jwt-public.txt', publicKey);
+          EOF
+          echo "JWT_PRIVATE_KEY<<ENVKEY" >> $GITHUB_ENV
+          cat jwt-private.txt >> $GITHUB_ENV
+          echo "ENVKEY" >> $GITHUB_ENV
+          echo "JWT_PUBLIC_KEY<<ENVKEY" >> $GITHUB_ENV
+          cat jwt-public.txt >> $GITHUB_ENV
+          echo "ENVKEY" >> $GITHUB_ENV
+
       - name: Run tests
         run: npm test
         env:
@@ -45,3 +66,7 @@ jobs:
           REDIS_URL: redis://localhost:6379
           RABBITMQ_URL: amqp://localhost:5672
           RABBITMQ_EXCHANGE: test_exchange
+          JWT_PRIVATE_KEY: ${{ env.JWT_PRIVATE_KEY }}
+          JWT_PUBLIC_KEY: ${{ env.JWT_PUBLIC_KEY }}
+          JWT_KEY_ID: test-key-1
+          JWT_ISSUER: test-auth-service
