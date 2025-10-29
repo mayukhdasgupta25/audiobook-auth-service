@@ -24,7 +24,9 @@ export class JWKSController {
          try {
             storedKeyHash = await redisService.getKeyHash();
          } catch (error) {
-            console.warn('Failed to get key hash from Redis, continuing without cache:', error);
+            if (config.NODE_ENV !== 'test') {
+               console.warn('Failed to get key hash from Redis, continuing without cache:', error);
+            }
          }
 
          // If key hash has changed, invalidate the cache
@@ -47,7 +49,9 @@ export class JWKSController {
                console.log('JWKS cache miss');
             }
          } catch (error) {
-            console.warn('Failed to get cached JWKS, generating new one:', error);
+            if (config.NODE_ENV !== 'test') {
+               console.warn('Failed to get cached JWKS, generating new one:', error);
+            }
          }
 
          // If not cached, generate new JWKS
@@ -59,7 +63,9 @@ export class JWKSController {
                await redisService.cacheJWKS(jwks, 3600);
                console.log('JWKS cached successfully');
             } catch (error) {
-               console.warn('Failed to cache JWKS, continuing without cache:', error);
+               if (config.NODE_ENV !== 'test') {
+                  console.warn('Failed to cache JWKS, continuing without cache:', error);
+               }
             }
          }
 
@@ -69,7 +75,9 @@ export class JWKSController {
                await redisService.storeKeyHash(currentKeyHash);
                console.log('Key hash updated');
             } catch (error) {
-               console.warn('Failed to store key hash:', error);
+               if (config.NODE_ENV !== 'test') {
+                  console.warn('Failed to store key hash:', error);
+               }
             }
          }
 

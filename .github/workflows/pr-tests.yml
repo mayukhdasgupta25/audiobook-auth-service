@@ -1,0 +1,53 @@
+name: PR Tests
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  test:
+    # Run only if PR title or branch name contains hotfix, improve, or feature
+    if: |
+      contains(github.event.pull_request.title, 'hotfix') ||
+      contains(github.event.pull_request.title, 'improve') ||
+      contains(github.event.pull_request.title, 'feature') ||
+      contains(github.event.pull_request.head.ref, 'hotfix') ||
+      contains(github.event.pull_request.head.ref, 'improve') ||
+      contains(github.event.pull_request.head.ref, 'feature')
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: test_auth_service
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_auth_service
+          NODE_ENV: test
+          REDIS_URL: redis://localhost:6379
+          RABBITMQ_URL: amqp://localhost:5672
+          RABBITMQ_EXCHANGE: test_exchange

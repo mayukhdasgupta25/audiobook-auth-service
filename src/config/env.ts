@@ -50,11 +50,14 @@ export const config = {
    LOG_LEVEL: process.env['LOG_LEVEL'] || 'info',
 };
 
-// Validate required environment variables
+// Validate required environment variables (skip in test environment)
+// In test environment, env vars are set in tests/setup.ts before this module loads
 const requiredEnvVars = ['DATABASE_URL', 'JWT_PRIVATE_KEY', 'JWT_PUBLIC_KEY', 'RABBITMQ_URL'];
 
-for (const envVar of requiredEnvVars) {
-   if (!process.env[envVar]) {
-      throw new Error(`Missing required environment variable: ${envVar}`);
+if (nodeEnv !== 'test') {
+   for (const envVar of requiredEnvVars) {
+      if (!process.env[envVar]) {
+         throw new Error(`Missing required environment variable: ${envVar}`);
+      }
    }
 }

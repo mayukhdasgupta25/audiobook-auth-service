@@ -1,0 +1,72 @@
+name: Main Branch Tests
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: test_auth_service
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate test JWT keys
+        id: generate-keys
+        run: |
+          node << 'EOF'
+          const forge = require('node-forge');
+          const keypair = forge.pki.rsa.generateKeyPair(2048);
+          const privateKey = forge.pki.privateKeyToPem(keypair.privateKey);
+          const publicKey = forge.pki.publicKeyToPem(keypair.publicKey);
+
+          // Use heredoc delimiter to handle multi-line keys
+          const fs = require('fs');
+          fs.writeFileSync('jwt-private.txt', privateKey);
+          fs.writeFileSync('jwt-public.txt', publicKey);
+          EOF
+          echo "JWT_PRIVATE_KEY<<ENVKEY" >> $GITHUB_ENV
+          cat jwt-private.txt >> $GITHUB_ENV
+          echo "ENVKEY" >> $GITHUB_ENV
+          echo "JWT_PUBLIC_KEY<<ENVKEY" >> $GITHUB_ENV
+          cat jwt-public.txt >> $GITHUB_ENV
+          echo "ENVKEY" >> $GITHUB_ENV
+
+      - name: Run tests
+        run: npm test
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_auth_service
+          NODE_ENV: test
+          REDIS_URL: redis://localhost:6379
+          RABBITMQ_URL: amqp://localhost:5672
+          RABBITMQ_EXCHANGE: test_exchange
+          JWT_PRIVATE_KEY: ${{ env.JWT_PRIVATE_KEY }}
+          JWT_PUBLIC_KEY: ${{ env.JWT_PUBLIC_KEY }}
+          JWT_KEY_ID: test-key-1
+          JWT_ISSUER: test-auth-service
