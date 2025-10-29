@@ -21,6 +21,7 @@ jest.mock('../../src/utils/crypto', () => ({
 
 jest.mock('../../src/config/env', () => ({
    config: {
+      NODE_ENV: 'test',
       JWT_PUBLIC_KEY: '-----BEGIN PUBLIC KEY-----\nTEST_KEY\n-----END PUBLIC KEY-----',
       JWT_KEY_ID: 'test-key-1',
       JWT_PRIVATE_KEY: '-----BEGIN PRIVATE KEY-----\nTEST_KEY\n-----END PRIVATE KEY-----',

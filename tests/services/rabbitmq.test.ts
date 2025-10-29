@@ -1,4 +1,5 @@
 import { RabbitMQService } from '../../src/services/rabbitmq';
+import { config } from '../../src/config/env';
 
 // Create mocks inside factory to avoid hoisting issues
 jest.mock('amqplib', () => {
@@ -136,7 +137,7 @@ describe('RabbitMQService', () => {
          await rabbitmqService.publishUserCreated(userId);
 
          expect(mockChannel.publish).toHaveBeenCalledWith(
-            'users',
+            config.RABBITMQ_EXCHANGE,
             'user.created',
             Buffer.from(JSON.stringify({ userId })),
             expect.objectContaining({
@@ -154,7 +155,7 @@ describe('RabbitMQService', () => {
          await rabbitmqService.publishEvent(routingKey, data);
 
          expect(mockChannel.publish).toHaveBeenCalledWith(
-            'users',
+            config.RABBITMQ_EXCHANGE,
             routingKey,
             Buffer.from(JSON.stringify(data)),
             expect.objectContaining({
