@@ -259,7 +259,7 @@ export class RedisService {
       try {
          await this.client.ping();
          return true;
-      } catch (error) {
+      } catch (_error) {
          return false;
       }
    }
