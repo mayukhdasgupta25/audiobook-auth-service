@@ -48,7 +48,7 @@ export const authenticateToken = async (
       (req as any).token = token;
 
       next();
-   } catch (error) {
+   } catch (_error) {
       res.status(401).json({ error: 'Invalid or expired token' });
    }
 };

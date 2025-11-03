@@ -20,7 +20,7 @@ export class PasswordUtils {
             timeCost: config.ARGON2_ITERATIONS,
             parallelism: config.ARGON2_PARALLELISM,
          });
-      } catch (error) {
+      } catch (_error) {
          throw new Error('Failed to hash password');
       }
    }
@@ -31,7 +31,7 @@ export class PasswordUtils {
    static async verifyPassword(password: string, hash: string): Promise<boolean> {
       try {
          return await argon2.verify(hash, password);
-      } catch (error) {
+      } catch (_error) {
          return false;
       }
    }
@@ -77,7 +77,7 @@ export class JWTUtils {
             algorithms: ['RS256'],
             issuer: config.JWT_ISSUER,
          }) as JWTPayload;
-      } catch (error) {
+      } catch (_error) {
          throw new Error('Invalid or expired token');
       }
    }
@@ -88,7 +88,7 @@ export class JWTUtils {
    static decodeToken(token: string): JWTPayload | null {
       try {
          return jwt.decode(token) as JWTPayload;
-      } catch (error) {
+      } catch (_error) {
          return null;
       }
    }
