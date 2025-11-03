@@ -114,7 +114,7 @@ export class JWKSController {
             service: 'auth-service',
             version: '1.0.0',
          });
-      } catch (error) {
+      } catch (_error) {
          res.status(500).json({
             status: 'unhealthy',
             error: 'Health check failed',
