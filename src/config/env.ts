@@ -27,11 +27,11 @@ export const config = {
    JWT_PUBLIC_KEY: process.env['JWT_PUBLIC_KEY'] || '',
    JWT_KEY_ID: process.env['JWT_KEY_ID'] || 'auth-service-key-1',
    JWT_ISSUER: process.env['JWT_ISSUER'] || 'auth-service',
-   JWT_ACCESS_TOKEN_EXPIRY: '10m',
+   JWT_ACCESS_TOKEN_EXPIRY: '7d',
    JWT_REFRESH_TOKEN_EXPIRY: '7d',
 
    // CORS Configuration
-   CORS_ORIGINS: process.env['CORS_ORIGINS']?.split(',') || ['http://localhost:3000', 'http://localhost:8081', 'http://localhost:8082'],
+   CORS_ORIGINS: process.env['CORS_ORIGINS']?.split(',') || ['http://192.168.1.9:3000', 'http://localhost:8081', 'http://localhost:8082'],
 
    // Rate Limiting
    RATE_LIMIT_WINDOW_MS: parseInt(process.env['RATE_LIMIT_WINDOW_MS'] || '900000', 10),

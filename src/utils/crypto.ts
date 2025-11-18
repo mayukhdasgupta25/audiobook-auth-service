@@ -51,7 +51,7 @@ export class JWTUtils {
       const fullPayload: JWTPayload = {
          ...payload,
          iat: now,
-         exp: now + this.parseExpiry('10m'),
+         exp: now + this.parseExpiry(config.JWT_ACCESS_TOKEN_EXPIRY),
          jti,
          iss: config.JWT_ISSUER,
       };

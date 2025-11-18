@@ -60,10 +60,10 @@ export class RedisService {
             ...(reason && { reason }),
          };
 
-         // Store with TTL of 10 minutes (access token expiry)
+         // Store with TTL of 7 days (access token expiry)
          await this.client.setEx(
             `revoked:${jti}`,
-            600, // 10 minutes in seconds
+            604800, // 7 days in seconds (7 * 24 * 60 * 60)
             JSON.stringify(revokedToken)
          );
 
