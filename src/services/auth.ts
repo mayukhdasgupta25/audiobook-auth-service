@@ -90,7 +90,7 @@ export class AuthService {
     * Login user (browser or mobile)
     */
    async login(data: LoginRequest): Promise<AuthResponse> {
-      const { email, password, clientType = 'browser' } = data;
+      const { email, password, clientType = 'mobile' } = data;
 
       // Find user
       const user = await prisma.user.findUnique({
