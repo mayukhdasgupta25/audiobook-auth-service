@@ -1,6 +1,7 @@
 import { PrismaClient, Role } from '@prisma/client';
 import argon2 from 'argon2';
 
+// Prisma 7 reads connection from prisma.config.ts automatically
 const prisma = new PrismaClient();
 
 /**
