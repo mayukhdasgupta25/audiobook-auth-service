@@ -15,6 +15,7 @@ import {
    ChangePasswordRequest
 } from '../types';
 
+// Prisma 7 reads connection from prisma.config.ts automatically
 const prisma = new PrismaClient();
 
 /**
@@ -90,7 +91,7 @@ export class AuthService {
     * Login user (browser or mobile)
     */
    async login(data: LoginRequest): Promise<AuthResponse> {
-      const { email, password, clientType = 'mobile' } = data;
+      const { email, password } = data;
 
       // Find user
       const user = await prisma.user.findUnique({
@@ -130,6 +131,7 @@ export class AuthService {
 
       const response: AuthResponse = {
          accessToken,
+         refreshToken,
          user: {
             id: user.id,
             email: user.email,
@@ -139,9 +141,9 @@ export class AuthService {
       };
 
       // Include refresh token in response for mobile clients
-      if (clientType === 'mobile') {
-         response.refreshToken = refreshToken;
-      }
+      // if (clientType === 'mobile') {
+      //    response.refreshToken = refreshToken;
+      // }
 
       return response;
    }
