@@ -91,7 +91,7 @@ export class AuthService {
     * Login user (browser or mobile)
     */
    async login(data: LoginRequest): Promise<AuthResponse> {
-      const { email, password } = data;
+      const { email, password, app } = data;
 
       // Find user
       const user = await prisma.user.findUnique({
@@ -113,6 +113,13 @@ export class AuthService {
       // Check if user is verified
       if (!user.emailVerified) {
          throw new Error('Email not verified. Please check your email for verification link.');
+      }
+
+      // If app is "admin", verify user has ADMIN role
+      if (app === 'admin') {
+         if (user.role !== Role.ADMIN) {
+            throw new Error('Access denied. Admin role required.');
+         }
       }
 
       // Generate tokens
@@ -152,15 +159,19 @@ export class AuthService {
     * Mobile login with PKCE
     */
    async mobileLogin(data: MobileLoginRequest): Promise<AuthResponse> {
-      const { email, password, codeChallenge, codeChallengeMethod } = data;
+      const { email, password, codeChallenge, codeChallengeMethod, app } = data;
 
       // Validate PKCE parameters
       if (codeChallengeMethod !== 'S256') {
          throw new Error('Unsupported code challenge method');
       }
 
-      // Perform regular login first
-      const loginResult = await this.login({ email, password, clientType: 'mobile' });
+      // Perform regular login first (pass app attribute if present)
+      const loginData: LoginRequest = { email, password, clientType: 'mobile' };
+      if (app) {
+         loginData.app = app;
+      }
+      const loginResult = await this.login(loginData);
 
       // Store PKCE session for token exchange
       const sessionId = TokenUtils.generateToken();
