@@ -33,6 +33,7 @@ router.get('/health', jwksController.healthCheck.bind(jwksController));
 
 // Protected routes (require authentication)
 router.get('/me', authenticateToken, authController.getMe.bind(authController));
+router.get('/user/:userId', authenticateToken, authController.getRole.bind(authController));
 router.post('/change-password', authenticateToken, authController.changePassword.bind(authController));
 
 // Admin only routes
