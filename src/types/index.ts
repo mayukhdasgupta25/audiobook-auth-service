@@ -42,6 +42,7 @@ export interface LoginRequest {
    email: string;
    password: string;
    clientType?: 'browser' | 'mobile';
+   app?: string;
 }
 
 export interface MobileLoginRequest extends LoginRequest {
