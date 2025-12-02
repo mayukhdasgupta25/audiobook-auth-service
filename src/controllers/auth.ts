@@ -11,7 +11,8 @@ import {
    ForgotPasswordRequest,
    ResetPasswordRequest,
    ChangePasswordRequest,
-   RevokeTokenRequest
+   RevokeTokenRequest,
+   GoogleOAuthRequest
 } from '../types';
 
 /**
@@ -85,6 +86,39 @@ export class AuthController {
       } catch (error) {
          res.status(401).json({
             error: error instanceof Error ? error.message : 'Mobile login failed',
+         });
+      }
+   }
+
+   /**
+    * Google OAuth authentication
+    */
+   async googleOAuth(req: Request, res: Response): Promise<void> {
+      try {
+         const data: GoogleOAuthRequest = req.body;
+         const result = await authService.googleOAuth(data);
+
+         // Set refresh token as httpOnly cookie for browser clients
+         if (data.clientType === 'browser' && result.refreshToken) {
+            res.cookie('refreshToken', result.refreshToken, {
+               httpOnly: true,
+               secure: process.env['NODE_ENV'] === 'production',
+               sameSite: process.env['NODE_ENV'] === 'production' ? 'strict' : 'lax',
+               path: '/',
+               maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+            });
+
+            // Remove refresh token from response body for browser clients
+            delete result.refreshToken;
+         }
+
+         res.json({
+            message: 'Google OAuth authentication successful',
+            ...result,
+         });
+      } catch (error) {
+         res.status(401).json({
+            error: error instanceof Error ? error.message : 'Google OAuth authentication failed',
          });
       }
    }

@@ -2,6 +2,7 @@ import { PrismaClient, User, Role } from '@prisma/client';
 import { PasswordUtils, TokenUtils } from '../utils/crypto';
 import { redisService } from './redis';
 import { rabbitmqService } from './rabbitmq';
+import { googleOAuthService } from './google-oauth';
 import {
    RegisterRequest,
    LoginRequest,
@@ -12,7 +13,8 @@ import {
    VerifyEmailRequest,
    ForgotPasswordRequest,
    ResetPasswordRequest,
-   ChangePasswordRequest
+   ChangePasswordRequest,
+   GoogleOAuthRequest
 } from '../types';
 
 // Prisma 7 reads connection from prisma.config.ts automatically
@@ -102,6 +104,11 @@ export class AuthService {
          // Use constant time to prevent timing attacks
          await PasswordUtils.hashPassword('dummy');
          throw new Error('Invalid email or password');
+      }
+
+      // Check if user has a password (OAuth users don't have passwords)
+      if (!user.password) {
+         throw new Error('Invalid email or password. Please use Google OAuth to sign in.');
       }
 
       // Verify password
@@ -357,6 +364,11 @@ export class AuthService {
          throw new Error('User not found');
       }
 
+      // Check if user has a password (OAuth users can't change password this way)
+      if (!user.password) {
+         throw new Error('Password change not available for OAuth users');
+      }
+
       // Verify current password
       const isValidPassword = await PasswordUtils.verifyPassword(currentPassword, user.password);
       if (!isValidPassword) {
@@ -374,6 +386,105 @@ export class AuthService {
 
       // Revoke all refresh tokens for security
       await this.revokeAllUserTokens(userId);
+   }
+
+   /**
+    * Google OAuth authentication
+    * Verifies Google token and handles signup/login flow
+    */
+   async googleOAuth(data: GoogleOAuthRequest): Promise<AuthResponse> {
+      const { token, app } = data;
+
+      // Verify Google token
+      const googleUser = await googleOAuthService.verifyGoogleToken(token);
+
+      // Check if user exists by email
+      let user = await prisma.user.findUnique({
+         where: { email: googleUser.email },
+      });
+
+      if (user) {
+         // User exists - login flow
+         // Update googleId if not set (account linking)
+         if (!user.googleId) {
+            await prisma.user.update({
+               where: { id: user.id },
+               data: { googleId: googleUser.googleId },
+            });
+            user.googleId = googleUser.googleId;
+         }
+
+         // Verify googleId matches (security check)
+         if (user.googleId !== googleUser.googleId) {
+            throw new Error('Google account mismatch. Please use the correct Google account.');
+         }
+
+         // Auto-verify email if not already verified (Google already verified it)
+         if (!user.emailVerified && googleUser.emailVerified) {
+            await prisma.user.update({
+               where: { id: user.id },
+               data: { emailVerified: true },
+            });
+            user.emailVerified = true;
+         }
+
+         // Check if user is verified
+         if (!user.emailVerified) {
+            throw new Error('Email not verified. Please check your email for verification link.');
+         }
+
+         // If app is "admin", verify user has ADMIN role
+         if (app === 'admin') {
+            if (user.role !== Role.ADMIN) {
+               throw new Error('Access denied. Admin role required.');
+            }
+         }
+      } else {
+         // User doesn't exist - signup flow
+         // Create new user with auto-verified email (Google already verified it)
+         user = await prisma.user.create({
+            data: {
+               email: googleUser.email,
+               password: null, // OAuth users don't have passwords
+               googleId: googleUser.googleId,
+               role: Role.USER,
+               emailVerified: googleUser.emailVerified, // Auto-verify since Google verified it
+            },
+         });
+
+         // Publish user created event to RabbitMQ
+         try {
+            await rabbitmqService.publishUserCreated(user.id);
+         } catch (error) {
+            console.error('Failed to publish user created event:', error);
+            // Don't fail registration if RabbitMQ publishing fails
+         }
+      }
+
+      // Generate tokens (same as login flow)
+      const accessToken = this.generateAccessToken(user);
+      const refreshToken = TokenUtils.generateRefreshToken();
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+      // Store refresh token
+      await prisma.refreshToken.create({
+         data: {
+            token: refreshToken,
+            userId: user.id,
+            expiresAt,
+         },
+      });
+
+      return {
+         accessToken,
+         refreshToken,
+         user: {
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            emailVerified: user.emailVerified,
+         },
+      };
    }
 
    /**
