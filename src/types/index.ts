@@ -76,6 +76,12 @@ export interface RevokeTokenRequest {
    jti: string;
 }
 
+export interface GoogleOAuthRequest {
+   token: string;
+   clientType?: 'browser' | 'mobile';
+   app?: string;
+}
+
 // Response interfaces
 export interface AuthResponse {
    accessToken: string;

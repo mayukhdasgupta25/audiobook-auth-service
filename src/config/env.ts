@@ -41,6 +41,9 @@ export const config = {
    EMAIL_FROM: process.env['EMAIL_FROM'] || 'noreply@audiobook.com',
    EMAIL_SERVICE_URL: process.env['EMAIL_SERVICE_URL'] || '',
 
+   // Google OAuth Configuration
+   GOOGLE_CLIENT_ID: process.env['GOOGLE_CLIENT_ID'] || '',
+
    // Security Configuration
    ARGON2_MEMORY: parseInt(process.env['ARGON2_MEMORY'] || '65536', 10),
    ARGON2_ITERATIONS: parseInt(process.env['ARGON2_ITERATIONS'] || '3', 10),
