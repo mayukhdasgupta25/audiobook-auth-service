@@ -398,6 +398,8 @@ export class AuthService {
       // Verify Google token
       const googleUser = await googleOAuthService.verifyGoogleToken(token);
 
+      console.log('googleUser', googleUser);
+
       // Check if user exists by email
       let user = await prisma.user.findUnique({
          where: { email: googleUser.email },
@@ -452,9 +454,19 @@ export class AuthService {
             },
          });
 
-         // Publish user created event to RabbitMQ
+         // Extract firstName and lastName from Google user's name
+         let firstName: string | undefined;
+         let lastName: string | undefined;
+         if (googleUser.name) {
+            const nameParts = googleUser.name.trim().split(/\s+/);
+            firstName = nameParts[0] || undefined;
+            // All remaining words form the lastName
+            lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : undefined;
+         }
+
+         // Publish user created event to RabbitMQ with firstName and lastName
          try {
-            await rabbitmqService.publishUserCreated(user.id);
+            await rabbitmqService.publishUserCreated(user.id, firstName, lastName);
          } catch (error) {
             console.error('Failed to publish user created event:', error);
             // Don't fail registration if RabbitMQ publishing fails
