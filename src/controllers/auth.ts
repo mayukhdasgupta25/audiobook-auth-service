@@ -1,7 +1,9 @@
 import { Request, Response } from 'express';
 import { authService } from '../services/auth';
 import { redisService } from '../services/redis';
+import { otpService } from '../services/otp';
 import { JWTUtils } from '../utils/crypto';
+import { OtpPurpose } from '@prisma/client';
 import {
    RegisterRequest,
    LoginRequest,
@@ -10,9 +12,15 @@ import {
    VerifyEmailRequest,
    ForgotPasswordRequest,
    ResetPasswordRequest,
-   ChangePasswordRequest,
    RevokeTokenRequest,
-   GoogleOAuthRequest
+   GoogleOAuthRequest,
+   VerifyOTPRequest,
+   ResendOTPRequest,
+   VerifyPasswordChangeOTPRequest,
+   ChangePasswordRequest,
+   VerifyEmailUpdateOTPRequest,
+   UpdateEmailRequest,
+   VerifyForgotPasswordOTPRequest
 } from '../types';
 
 /**
@@ -28,8 +36,9 @@ export class AuthController {
          const result = await authService.register(data);
 
          res.status(201).json({
-            message: 'User registered successfully. Please check your email for verification.',
+            message: 'User registered successfully. Please check your email for OTP verification.',
             user: result.user,
+            otpSent: result.otpSent,
          });
       } catch (error) {
          res.status(400).json({
@@ -67,6 +76,79 @@ export class AuthController {
       } catch (error) {
          res.status(401).json({
             error: error instanceof Error ? error.message : 'Login failed',
+         });
+      }
+   }
+
+   /**
+    * Verify registration OTP and complete user profile creation
+    */
+   async verifyRegistrationOTP(req: Request, res: Response): Promise<void> {
+      try {
+         const data: VerifyOTPRequest = req.body;
+         console.log(data);
+         const result = await authService.verifyRegistrationOTP(data);
+
+         res.json({
+            message: 'Registration OTP verified successfully. User profile created.',
+            accessToken: result.accessToken,
+            refreshToken: result.refreshToken,
+            user: result.user,
+         });
+      } catch (error) {
+         res.status(400).json({
+            error: error instanceof Error ? error.message : 'OTP verification failed',
+         });
+      }
+   }
+
+   /**
+    * Resend OTP (for registration, password change, or email update)
+    */
+   async resendOTP(req: Request, res: Response): Promise<void> {
+      try {
+         const data: ResendOTPRequest = req.body;
+         const { email } = data;
+
+         // Find user by email
+         const { PrismaClient } = await import('@prisma/client');
+         const prisma = new PrismaClient();
+         const user = await prisma.user.findUnique({
+            where: { email: email.toLowerCase() },
+         });
+
+         if (!user) {
+            res.status(404).json({ error: 'User not found' });
+            return;
+         }
+
+         // Purpose must be specified (REGISTRATION, EMAIL_UPDATE, or PASSWORD_UPDATE)
+         const purpose = (req.body as any).purpose;
+         if (!purpose || purpose === OtpPurpose.LOGIN) {
+            res.status(400).json({
+               error: 'Purpose is required and must be REGISTRATION, EMAIL_UPDATE, or PASSWORD_UPDATE',
+            });
+            return;
+         }
+
+         // Check if can resend
+         const canResend = await otpService.canResendOTP(user.id, purpose);
+         if (!canResend) {
+            res.status(429).json({
+               error: 'Please wait 30 seconds before requesting a new OTP',
+            });
+            return;
+         }
+
+         // Create new OTP
+         await otpService.createOTP(user.id, purpose, user.email);
+
+         res.json({
+            message: 'OTP resent successfully',
+         });
+      } catch (error) {
+         res.status(400).json({
+            error: error instanceof Error ? error.message : 'Failed to resend OTP',
          });
       }
    }
@@ -216,7 +298,7 @@ export class AuthController {
    }
 
    /**
-    * Request password reset
+    * Request password reset OTP (POST endpoint)
     */
    async forgotPassword(req: Request, res: Response): Promise<void> {
       try {
@@ -224,7 +306,7 @@ export class AuthController {
          await authService.forgotPassword(data);
 
          res.json({
-            message: 'If the email exists, a password reset link has been sent'
+            message: 'If the email exists, an OTP has been sent to your email'
          });
       } catch (error) {
          res.status(400).json({
@@ -234,7 +316,23 @@ export class AuthController {
    }
 
    /**
-    * Reset password with token
+    * Verify forgot password OTP
+    */
+   async verifyForgotPasswordOTP(req: Request, res: Response): Promise<void> {
+      try {
+         const data: VerifyForgotPasswordOTPRequest = req.body;
+         await authService.verifyForgotPasswordOTP(data);
+
+         res.json({ message: 'OTP verified successfully' });
+      } catch (error) {
+         res.status(400).json({
+            error: error instanceof Error ? error.message : 'OTP verification failed',
+         });
+      }
+   }
+
+   /**
+    * Reset password (no OTP check required)
     */
    async resetPassword(req: Request, res: Response): Promise<void> {
       try {
@@ -250,7 +348,42 @@ export class AuthController {
    }
 
    /**
-    * Change password (authenticated user)
+    * Request OTP for password change (GET endpoint)
+    */
+   async requestPasswordChangeOTP(req: Request, res: Response): Promise<void> {
+      try {
+         const userId = (req as any).user.id;
+
+         await authService.requestPasswordChangeOTP(userId);
+
+         res.json({ message: 'OTP sent to your email for password change' });
+      } catch (error) {
+         res.status(400).json({
+            error: error instanceof Error ? error.message : 'Failed to send OTP',
+         });
+      }
+   }
+
+   /**
+    * Verify password change OTP
+    */
+   async verifyPasswordChangeOTP(req: Request, res: Response): Promise<void> {
+      try {
+         const data: VerifyPasswordChangeOTPRequest = req.body;
+         const userId = (req as any).user.id;
+
+         await authService.verifyPasswordChangeOTP(userId, data);
+
+         res.json({ message: 'OTP verified successfully' });
+      } catch (error) {
+         res.status(400).json({
+            error: error instanceof Error ? error.message : 'OTP verification failed',
+         });
+      }
+   }
+
+   /**
+    * Change password (authenticated user) - no OTP check required
     */
    async changePassword(req: Request, res: Response): Promise<void> {
       try {
@@ -263,6 +396,64 @@ export class AuthController {
       } catch (error) {
          res.status(400).json({
             error: error instanceof Error ? error.message : 'Password change failed',
+         });
+      }
+   }
+
+   /**
+    * Request OTP for email update (GET endpoint)
+    */
+   async requestEmailUpdateOTP(req: Request, res: Response): Promise<void> {
+      try {
+         const email = req.query['email'] as string;
+         if (!email) {
+            res.status(400).json({ error: 'Current email is required' });
+            return;
+         }
+         const userId = (req as any).user.id;
+
+         await authService.requestEmailUpdateOTP(userId, { email });
+
+         res.json({ message: 'OTP sent to current email address for verification' });
+      } catch (error) {
+         res.status(400).json({
+            error: error instanceof Error ? error.message : 'Failed to send OTP',
+         });
+      }
+   }
+
+   /**
+    * Verify email update OTP
+    */
+   async verifyEmailUpdateOTP(req: Request, res: Response): Promise<void> {
+      try {
+         const data: VerifyEmailUpdateOTPRequest = req.body;
+         const userId = (req as any).user.id;
+
+         await authService.verifyEmailUpdateOTP(userId, data);
+
+         res.json({ message: 'OTP verified successfully' });
+      } catch (error) {
+         res.status(400).json({
+            error: error instanceof Error ? error.message : 'OTP verification failed',
+         });
+      }
+   }
+
+   /**
+    * Update email (no OTP check required)
+    */
+   async updateEmail(req: Request, res: Response): Promise<void> {
+      try {
+         const data: UpdateEmailRequest = req.body;
+         const userId = (req as any).user.id;
+
+         await authService.updateEmail(userId, data);
+
+         res.json({ message: 'Email updated successfully. Please verify your new email.' });
+      } catch (error) {
+         res.status(400).json({
+            error: error instanceof Error ? error.message : 'Email update failed',
          });
       }
    }
