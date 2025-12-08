@@ -1,8 +1,9 @@
-import { PrismaClient, User, Role } from '@prisma/client';
+import { PrismaClient, User, Role, OtpPurpose } from '@prisma/client';
 import { PasswordUtils, TokenUtils } from '../utils/crypto';
 import { redisService } from './redis';
 import { rabbitmqService } from './rabbitmq';
 import { googleOAuthService } from './google-oauth';
+import { otpService } from './otp';
 import {
    RegisterRequest,
    LoginRequest,
@@ -13,8 +14,13 @@ import {
    VerifyEmailRequest,
    ForgotPasswordRequest,
    ResetPasswordRequest,
+   GoogleOAuthRequest,
+   VerifyOTPRequest,
    ChangePasswordRequest,
-   GoogleOAuthRequest
+   UpdateEmailRequest,
+   VerifyPasswordChangeOTPRequest,
+   VerifyEmailUpdateOTPRequest,
+   VerifyForgotPasswordOTPRequest
 } from '../types';
 
 // Prisma 7 reads connection from prisma.config.ts automatically
@@ -27,7 +33,7 @@ export class AuthService {
    /**
     * Register a new user
     */
-   async register(data: RegisterRequest): Promise<{ user: UserResponse; verificationToken: string }> {
+   async register(data: RegisterRequest): Promise<{ user: UserResponse; otpSent: boolean }> {
       const { email, password } = data;
 
       // Check if user already exists
@@ -52,28 +58,12 @@ export class AuthService {
          },
       });
 
-      // Generate email verification token
-      const verificationToken = TokenUtils.generateEmailVerificationToken();
-      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
-
-      await prisma.emailVerificationToken.create({
-         data: {
-            token: verificationToken,
-            userId: user.id,
-            expiresAt,
-         },
-      });
-
-      // Log email verification (for development)
-      console.log(`Email verification token for ${user.email}: ${verificationToken}`);
-      console.log(`Verification link: http://localhost:3000/verify-email?token=${verificationToken}`);
-
-      // Publish user created event to RabbitMQ
+      // Generate and send OTP for registration (RabbitMQ will be published after OTP verification)
       try {
-         await rabbitmqService.publishUserCreated(user.id);
+         await otpService.createOTP(user.id, OtpPurpose.REGISTRATION, user.email);
       } catch (error) {
-         console.error('Failed to publish user created event:', error);
-         // Don't fail registration if RabbitMQ publishing fails
+         console.error('Failed to create OTP:', error);
+         throw new Error('Failed to send OTP. Please try again.');
       }
 
       return {
@@ -85,7 +75,7 @@ export class AuthService {
             createdAt: user.createdAt,
             updatedAt: user.updatedAt,
          },
-         verificationToken,
+         otpSent: true,
       };
    }
 
@@ -154,10 +144,66 @@ export class AuthService {
          },
       };
 
-      // Include refresh token in response for mobile clients
-      // if (clientType === 'mobile') {
-      //    response.refreshToken = refreshToken;
-      // }
+      return response;
+   }
+
+   /**
+    * Verify registration OTP and publish to RabbitMQ
+    * Returns access and refresh tokens
+    */
+   async verifyRegistrationOTP(data: VerifyOTPRequest): Promise<AuthResponse> {
+      const { email, otp } = data;
+
+      // Find user
+      const user = await prisma.user.findUnique({
+         where: { email: email.toLowerCase() },
+      });
+
+      if (!user) {
+         throw new Error('User not found');
+      }
+
+      // Verify OTP
+      await otpService.verifyOTP(user.id, otp, OtpPurpose.REGISTRATION);
+
+      // Update emailVerified to true after OTP verification
+      const updatedUser = await prisma.user.update({
+         where: { id: user.id },
+         data: { emailVerified: true },
+      });
+
+      // Generate tokens
+      const accessToken = this.generateAccessToken(updatedUser);
+      const refreshToken = TokenUtils.generateRefreshToken();
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+      // Store refresh token
+      await prisma.refreshToken.create({
+         data: {
+            token: refreshToken,
+            userId: updatedUser.id,
+            expiresAt,
+         },
+      });
+
+      // Publish user created event to RabbitMQ after OTP verification
+      try {
+         await rabbitmqService.publishUserCreated(updatedUser.id);
+      } catch (error) {
+         console.error('Failed to publish user created event:', error);
+         // Don't fail if RabbitMQ publishing fails, OTP is already verified
+      }
+
+      const response: AuthResponse = {
+         accessToken,
+         refreshToken,
+         user: {
+            id: updatedUser.id,
+            email: updatedUser.email,
+            role: updatedUser.role,
+            emailVerified: updatedUser.emailVerified,
+         },
+      };
 
       return response;
    }
@@ -285,7 +331,7 @@ export class AuthService {
    }
 
    /**
-    * Request password reset
+    * Request password reset OTP
     */
    async forgotPassword(data: ForgotPasswordRequest): Promise<void> {
       const { email } = data;
@@ -299,36 +345,45 @@ export class AuthService {
          return;
       }
 
-      // Generate reset token
-      const resetToken = TokenUtils.generatePasswordResetToken();
-      const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
-
-      await prisma.passwordResetToken.create({
-         data: {
-            token: resetToken,
-            userId: user.id,
-            expiresAt,
-         },
-      });
-
-      // Log password reset (for development)
-      console.log(`Password reset token for ${user.email}: ${resetToken}`);
-      console.log(`Reset link: http://localhost:3000/reset-password?token=${resetToken}`);
+      // Generate and send OTP
+      try {
+         await otpService.createOTP(user.id, OtpPurpose.PASSWORD_RESET, user.email);
+      } catch (error) {
+         console.error('Failed to create OTP:', error);
+         throw new Error(error instanceof Error ? error.message : 'Failed to send OTP. Please try again.');
+      }
    }
 
    /**
-    * Reset password with token
+    * Verify forgot password OTP
     */
-   async resetPassword(data: ResetPasswordRequest): Promise<void> {
-      const { token, newPassword } = data;
+   async verifyForgotPasswordOTP(data: VerifyForgotPasswordOTPRequest): Promise<void> {
+      const { email, otp } = data;
 
-      const resetRecord = await prisma.passwordResetToken.findUnique({
-         where: { token },
-         include: { user: true },
+      const user = await prisma.user.findUnique({
+         where: { email: email.toLowerCase() },
       });
 
-      if (!resetRecord || resetRecord.used || resetRecord.expiresAt < new Date()) {
-         throw new Error('Invalid or expired reset token');
+      if (!user) {
+         throw new Error('User not found');
+      }
+
+      // Verify OTP
+      await otpService.verifyOTP(user.id, otp, OtpPurpose.PASSWORD_RESET);
+   }
+
+   /**
+    * Reset password (no OTP check required)
+    */
+   async resetPassword(data: ResetPasswordRequest): Promise<void> {
+      const { email, newPassword } = data;
+
+      const user = await prisma.user.findUnique({
+         where: { email: email.toLowerCase() },
+      });
+
+      if (!user) {
+         throw new Error('User not found');
       }
 
       // Hash new password
@@ -336,22 +391,52 @@ export class AuthService {
 
       // Update password
       await prisma.user.update({
-         where: { id: resetRecord.userId },
+         where: { id: user.id },
          data: { password: hashedPassword },
       });
 
-      // Mark token as used
-      await prisma.passwordResetToken.update({
-         where: { id: resetRecord.id },
-         data: { used: true },
-      });
-
       // Revoke all refresh tokens for security
-      await this.revokeAllUserTokens(resetRecord.userId);
+      await this.revokeAllUserTokens(user.id);
    }
 
    /**
-    * Change password (authenticated user)
+    * Request OTP for password change
+    */
+   async requestPasswordChangeOTP(userId: string): Promise<void> {
+      const user = await prisma.user.findUnique({
+         where: { id: userId },
+      });
+
+      if (!user) {
+         throw new Error('User not found');
+      }
+
+      // Check if user has a password (OAuth users can't change password this way)
+      if (!user.password) {
+         throw new Error('Password change not available for OAuth users');
+      }
+
+      // Generate and send OTP
+      try {
+         await otpService.createOTP(userId, OtpPurpose.PASSWORD_UPDATE, user.email);
+      } catch (error) {
+         console.error('Failed to create OTP:', error);
+         throw new Error(error instanceof Error ? error.message : 'Failed to send OTP. Please try again.');
+      }
+   }
+
+   /**
+    * Verify password change OTP
+    */
+   async verifyPasswordChangeOTP(userId: string, data: VerifyPasswordChangeOTPRequest): Promise<void> {
+      const { otp } = data;
+
+      // Verify OTP
+      await otpService.verifyOTP(userId, otp, OtpPurpose.PASSWORD_UPDATE);
+   }
+
+   /**
+    * Change password (authenticated user) - no OTP check required
     */
    async changePassword(userId: string, data: ChangePasswordRequest): Promise<void> {
       const { currentPassword, newPassword } = data;
@@ -389,6 +474,79 @@ export class AuthService {
    }
 
    /**
+    * Request OTP for email update
+    */
+   async requestEmailUpdateOTP(userId: string, data: { email: string }): Promise<void> {
+      const { email } = data;
+
+      const user = await prisma.user.findUnique({
+         where: { id: userId },
+      });
+
+      if (!user) {
+         throw new Error('User not found');
+      }
+      // Generate and send OTP to current email address
+      try {
+         await otpService.createOTP(userId, OtpPurpose.EMAIL_UPDATE, email.toLowerCase());
+      } catch (error) {
+         console.error('Failed to create OTP:', error);
+         throw new Error(error instanceof Error ? error.message : 'Failed to send OTP. Please try again.');
+      }
+   }
+
+   /**
+    * Verify email update OTP
+    */
+   async verifyEmailUpdateOTP(userId: string, data: VerifyEmailUpdateOTPRequest): Promise<void> {
+      const { otp } = data;
+
+      // Verify OTP
+      await otpService.verifyOTP(userId, otp, OtpPurpose.EMAIL_UPDATE);
+   }
+
+   /**
+    * Update email (no OTP check required)
+    */
+   async updateEmail(userId: string, data: UpdateEmailRequest): Promise<void> {
+      const { newEmail } = data;
+
+      const user = await prisma.user.findUnique({
+         where: { id: userId },
+      });
+
+      if (!user) {
+         throw new Error('User not found');
+      }
+
+      // Check if new email is different
+      if (user.email.toLowerCase() === newEmail.toLowerCase()) {
+         throw new Error('New email must be different from current email');
+      }
+
+      // Check if new email is already in use
+      const existingUser = await prisma.user.findUnique({
+         where: { email: newEmail.toLowerCase() },
+      });
+
+      if (existingUser) {
+         throw new Error('Email already in use');
+      }
+
+      // Update email
+      await prisma.user.update({
+         where: { id: userId },
+         data: {
+            email: newEmail.toLowerCase(),
+            emailVerified: false, // Require re-verification of new email
+         },
+      });
+
+      // Revoke all refresh tokens for security
+      await this.revokeAllUserTokens(userId);
+   }
+
+   /**
     * Google OAuth authentication
     * Verifies Google token and handles signup/login flow
     */
@@ -397,8 +555,6 @@ export class AuthService {
 
       // Verify Google token
       const googleUser = await googleOAuthService.verifyGoogleToken(token);
-
-      console.log('googleUser', googleUser);
 
       // Check if user exists by email
       let user = await prisma.user.findUnique({

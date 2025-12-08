@@ -1,4 +1,4 @@
-import { User, Role } from '@prisma/client';
+import { User, Role, OtpPurpose, EmailType } from '@prisma/client';
 
 // JWT Payload interface
 export interface JWTPayload {
@@ -60,16 +60,6 @@ export interface VerifyEmailRequest {
 
 export interface ForgotPasswordRequest {
    email: string;
-}
-
-export interface ResetPasswordRequest {
-   token: string;
-   newPassword: string;
-}
-
-export interface ChangePasswordRequest {
-   currentPassword: string;
-   newPassword: string;
 }
 
 export interface RevokeTokenRequest {
@@ -177,4 +167,43 @@ export interface PasswordResetData {
    email: string;
    token: string;
    expiresAt: Date;
+}
+
+// OTP interfaces
+export { OtpPurpose, EmailType };
+
+export interface VerifyOTPRequest {
+   email: string;
+   otp: string;
+}
+
+export interface ResendOTPRequest {
+   email: string;
+}
+
+export interface VerifyPasswordChangeOTPRequest {
+   otp: string;
+}
+
+export interface VerifyEmailUpdateOTPRequest {
+   otp: string;
+}
+
+export interface ChangePasswordRequest {
+   currentPassword: string;
+   newPassword: string;
+}
+
+export interface UpdateEmailRequest {
+   newEmail: string;
+}
+
+export interface VerifyForgotPasswordOTPRequest {
+   email: string;
+   otp: string;
+}
+
+export interface ResetPasswordRequest {
+   email: string;
+   newPassword: string;
 }
