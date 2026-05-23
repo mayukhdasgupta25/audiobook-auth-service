@@ -104,13 +104,21 @@ export class RabbitMQService {
    /**
     * Publish user created event
     */
-   async publishUserCreated(userId: string): Promise<void> {
+   async publishUserCreated(userId: string, firstName?: string, lastName?: string): Promise<void> {
       if (!this.isServiceConnected()) {
          throw new Error('RabbitMQ service is not connected');
       }
 
       try {
-         const message = JSON.stringify({ userId });
+         // Build message object, only including firstName and lastName if provided
+         const messageData: { userId: string; firstName?: string; lastName?: string } = { userId };
+         if (firstName !== undefined) {
+            messageData.firstName = firstName;
+         }
+         if (lastName !== undefined) {
+            messageData.lastName = lastName;
+         }
+         const message = JSON.stringify(messageData);
          const routingKey = 'user.created';
 
          const published = this.channel!.publish(
