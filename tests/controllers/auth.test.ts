@@ -70,7 +70,7 @@ describe('AuthController', () => {
          const mockUser = { id: 'user-123', email: 'test@example.com' };
          (authService.register as jest.Mock).mockResolvedValue({
             user: mockUser,
-            verificationToken: 'token-123',
+            otpSent: true,
          });
 
          mockRequest.body = { email: 'test@example.com', password: 'password123' };
@@ -83,8 +83,9 @@ describe('AuthController', () => {
          });
          expect(mockStatus).toHaveBeenCalledWith(201);
          expect(mockJson).toHaveBeenCalledWith({
-            message: 'User registered successfully. Please check your email for verification.',
+            message: 'User registered successfully. Please check your email for OTP verification.',
             user: mockUser,
+            otpSent: true,
          });
       });
 
@@ -142,7 +143,8 @@ describe('AuthController', () => {
          expect(mockCookie).toHaveBeenCalledWith('refreshToken', 'refresh-token', {
             httpOnly: true,
             secure: false,
-            sameSite: 'strict',
+            sameSite: 'lax',
+            path: '/',
             maxAge: 7 * 24 * 60 * 60 * 1000,
          });
          expect(mockJson).toHaveBeenCalledWith({
@@ -210,7 +212,8 @@ describe('AuthController', () => {
          expect(mockCookie).toHaveBeenCalledWith('refreshToken', 'new-refresh-token', {
             httpOnly: true,
             secure: false,
-            sameSite: 'strict',
+            sameSite: 'lax',
+            path: '/',
             maxAge: 7 * 24 * 60 * 60 * 1000,
          });
          expect(mockJson).toHaveBeenCalledWith({
@@ -318,14 +321,14 @@ describe('AuthController', () => {
    });
 
    describe('forgotPassword', () => {
-      test('should send password reset link', async () => {
+      test('should send password reset OTP', async () => {
          mockRequest.body = { email: 'test@example.com' };
 
          await authController.forgotPassword(mockRequest as Request, mockResponse as Response);
 
          expect(authService.forgotPassword).toHaveBeenCalledWith({ email: 'test@example.com' });
          expect(mockJson).toHaveBeenCalledWith({
-            message: 'If the email exists, a password reset link has been sent',
+            message: 'If the email exists, an OTP has been sent to your email',
          });
       });
    });
