@@ -147,6 +147,25 @@ describe('RabbitMQService', () => {
          );
       });
 
+      test('should publish user created event with firstName and lastName', async () => {
+         const userId = 'user-123';
+         const firstName = 'John';
+         const lastName = 'Doe Smith';
+         mockChannel.publish.mockReturnValueOnce(true);
+
+         await rabbitmqService.publishUserCreated(userId, firstName, lastName);
+
+         expect(mockChannel.publish).toHaveBeenCalledWith(
+            config.RABBITMQ_EXCHANGE,
+            'user.created',
+            Buffer.from(JSON.stringify({ userId, firstName, lastName })),
+            expect.objectContaining({
+               persistent: true,
+               timestamp: expect.any(Number),
+            })
+         );
+      });
+
       test('should publish generic event', async () => {
          const routingKey = 'user.updated';
          const data = { userId: 'user-456', action: 'update' };
