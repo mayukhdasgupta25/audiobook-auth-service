@@ -36,6 +36,7 @@ export interface JWKS {
 export interface RegisterRequest {
    email: string;
    password: string;
+   role?: Role;
 }
 
 export interface LoginRequest {
@@ -175,6 +176,8 @@ export { OtpPurpose, EmailType };
 export interface VerifyOTPRequest {
    email: string;
    otp: string;
+   firstName?: string;
+   lastName?: string;
 }
 
 export interface ResendOTPRequest {
