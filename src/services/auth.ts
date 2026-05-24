@@ -34,7 +34,7 @@ export class AuthService {
     * Register a new user
     */
    async register(data: RegisterRequest): Promise<{ user: UserResponse; otpSent: boolean }> {
-      const { email, password } = data;
+      const { email, password, role } = data;
 
       // Check if user already exists
       const existingUser = await prisma.user.findUnique({
@@ -53,7 +53,7 @@ export class AuthService {
          data: {
             email: email.toLowerCase(),
             password: hashedPassword,
-            role: Role.USER,
+            role: role ?? Role.USER,
             emailVerified: false,
          },
       });
@@ -152,7 +152,7 @@ export class AuthService {
     * Returns access and refresh tokens
     */
    async verifyRegistrationOTP(data: VerifyOTPRequest): Promise<AuthResponse> {
-      const { email, otp } = data;
+      const { email, otp, firstName, lastName } = data;
 
       // Find user
       const user = await prisma.user.findUnique({
@@ -188,7 +188,7 @@ export class AuthService {
 
       // Publish user created event to RabbitMQ after OTP verification
       try {
-         await rabbitmqService.publishUserCreated(updatedUser.id);
+         await rabbitmqService.publishUserCreated(updatedUser.id, firstName, lastName);
       } catch (error) {
          console.error('Failed to publish user created event:', error);
          // Don't fail if RabbitMQ publishing fails, OTP is already verified
