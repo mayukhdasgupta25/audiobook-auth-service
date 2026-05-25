@@ -27,7 +27,15 @@ process.env['JWT_ISSUER'] = 'test-auth-service';
 // (No imports needed here - tests can import what they need)
 
 // Mock Prisma client for tests
-jest.mock('@prisma/client', () => ({
+jest.mock('@prisma/client', () => {
+   class MockDecimal {
+      constructor(private value: string | number) {}
+      toString(): string {
+         return String(this.value);
+      }
+   }
+   return {
+   Prisma: { Decimal: MockDecimal, JsonNull: null },
    PrismaClient: jest.fn().mockImplementation(() => ({
       user: {
          findUnique: jest.fn(),
@@ -52,11 +60,35 @@ jest.mock('@prisma/client', () => ({
          update: jest.fn(),
       },
    })),
-   Role: {
-      USER: 'USER',
-      ADMIN: 'ADMIN',
+   Role: { USER: 'USER', ADMIN: 'ADMIN' },
+   BillingInterval: {
+      MONTHLY: 'MONTHLY',
+      QUARTERLY: 'QUARTERLY',
+      YEARLY: 'YEARLY',
+      LIFETIME: 'LIFETIME',
    },
-}));
+   SubscriptionStatus: {
+      PENDING: 'PENDING',
+      TRIALING: 'TRIALING',
+      ACTIVE: 'ACTIVE',
+      PAST_DUE: 'PAST_DUE',
+      PAUSED: 'PAUSED',
+      CANCELED: 'CANCELED',
+      EXPIRED: 'EXPIRED',
+   },
+   PlanChangeType: {
+      UPGRADE: 'UPGRADE',
+      DOWNGRADE: 'DOWNGRADE',
+   },
+   BillingEventType: {
+      PRORATION_CHARGE: 'PRORATION_CHARGE',
+      RENEWAL_CHARGE: 'RENEWAL_CHARGE',
+      RENEWAL_FAILED: 'RENEWAL_FAILED',
+      RENEWAL_RETRY_FAILED: 'RENEWAL_RETRY_FAILED',
+      PLAN_CHANGE_SCHEDULED: 'PLAN_CHANGE_SCHEDULED',
+   },
+   };
+});
 
 // Mock Redis service
 jest.mock('../src/services/redis', () => ({
