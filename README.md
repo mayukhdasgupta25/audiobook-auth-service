@@ -15,6 +15,7 @@ A secure authentication service built with Node.js, Express, TypeScript, and Pri
 - **Rate Limiting**: Protection against brute force attacks
 - **Security Headers**: Helmet.js and custom security middleware
 - **TypeScript**: Full type safety throughout the application
+- **Subscriptions**: Plan catalog and per-user subscriptions; see [docs/SUBSCRIPTIONS.md](./docs/SUBSCRIPTIONS.md)
 
 ## Architecture
 
@@ -181,7 +182,7 @@ The application uses a simple environment loader (`src/env.ts`) that:
 npm run dev                    # Start dev server
 npm run db:push               # Push schema
 npm run db:migrate            # Run migrations
-npm run db:seed               # Seed database
+npm run db:seed               # Seed subscription plans
 
 # Staging
 npm run dev:staging           # Start staging server
@@ -191,21 +192,9 @@ npm run start:prod            # Start production server
 npm run db:migrate:prod       # Deploy migrations to production
 ```
 
-## Test Users
+## Subscription plans (seed)
 
-After running the seed script (`npm run db:seed`), you'll have two test users:
-
-**Normal User:**
-
-- Email: `user@example.com`
-- Password: `user123`
-- Role: `USER`
-
-**Admin User:**
-
-- Email: `admin@example.com`
-- Password: `admin123`
-- Role: `ADMIN`
+After running `npm run db:seed`, the database includes Base, Standard, and Premium plans (skipped if plans already exist). See [docs/SUBSCRIPTIONS.md](./docs/SUBSCRIPTIONS.md).
 
 Both users are pre-verified and ready for testing authentication endpoints.
 

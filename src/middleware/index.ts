@@ -4,6 +4,7 @@ import { JWTUtils } from '../utils/crypto';
 import { redisService } from '../services/redis';
 import { config } from '../config/env';
 import { AuthError, ValidationError } from '../types';
+import { SubscriptionError } from '../types/subscription';
 
 /**
  * Authentication middleware
@@ -153,6 +154,14 @@ export const errorHandler = (
    }
 
    if (error instanceof AuthError) {
+      res.status(error.statusCode).json({
+         error: error.message,
+         code: error.code,
+      });
+      return;
+   }
+
+   if (error instanceof SubscriptionError) {
       res.status(error.statusCode).json({
          error: error.message,
          code: error.code,

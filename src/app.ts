@@ -4,6 +4,8 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { config } from './config/env';
 import authRoutes from './routes/auth';
+import subscriptionPlanRoutes from './routes/subscriptionPlan';
+import userSubscriptionRoutes from './routes/userSubscription';
 import {
    errorHandler,
    notFound,
@@ -47,6 +49,8 @@ export const createApp = (): express.Application => {
 
    // API routes
    app.use('/auth', authRoutes);
+   app.use('/auth/subscription-plans', subscriptionPlanRoutes);
+   app.use('/auth/subscriptions', userSubscriptionRoutes);
 
    // Root endpoint
    app.get('/', (_req, res) => {
@@ -57,6 +61,8 @@ export const createApp = (): express.Application => {
             health: '/health',
             auth: '/auth',
             jwks: '/auth/.well-known/jwks.json',
+            subscriptionPlans: '/auth/subscription-plans',
+            subscriptions: '/auth/subscriptions',
          },
       });
    });
