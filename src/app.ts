@@ -63,6 +63,7 @@ export const createApp = (): express.Application => {
             jwks: '/auth/.well-known/jwks.json',
             subscriptionPlans: '/auth/subscription-plans',
             subscriptions: '/auth/subscriptions',
+            devices: '/auth/devices',
          },
       });
    });

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authController } from '../controllers/auth';
 import { jwksController } from '../controllers/jwks';
+import userDeviceRoutes from './userDevice';
 import {
    authenticateToken,
    requireAdmin,
@@ -34,6 +35,9 @@ router.get('/.well-known/jwks.json', jwksController.getJWKS.bind(jwksController)
 
 // Health check endpoint
 router.get('/health', jwksController.healthCheck.bind(jwksController));
+
+// Device management (authenticated)
+router.use('/devices', userDeviceRoutes);
 
 // Protected routes (require authentication)
 router.get('/me', authenticateToken, authController.getMe.bind(authController));

@@ -4,6 +4,7 @@ import { redisService } from './redis';
 import { rabbitmqService } from './rabbitmq';
 import { googleOAuthService } from './google-oauth';
 import { otpService } from './otp';
+import { userDeviceService } from './userDevice';
 import {
    RegisterRequest,
    LoginRequest,
@@ -20,7 +21,9 @@ import {
    UpdateEmailRequest,
    VerifyPasswordChangeOTPRequest,
    VerifyEmailUpdateOTPRequest,
-   VerifyForgotPasswordOTPRequest
+   VerifyForgotPasswordOTPRequest,
+   DeviceContext,
+   DeviceRequestMeta,
 } from '../types';
 
 // Prisma 7 reads connection from prisma.config.ts automatically
@@ -82,7 +85,7 @@ export class AuthService {
    /**
     * Login user (browser or mobile)
     */
-   async login(data: LoginRequest): Promise<AuthResponse> {
+   async login(data: LoginRequest & { meta?: DeviceRequestMeta }): Promise<AuthResponse> {
       const { email, password, app } = data;
 
       // Find user
@@ -119,39 +122,16 @@ export class AuthService {
          }
       }
 
-      // Generate tokens
-      const accessToken = this.generateAccessToken(user);
-      const refreshToken = TokenUtils.generateRefreshToken();
-      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-
-      // Store refresh token
-      await prisma.refreshToken.create({
-         data: {
-            token: refreshToken,
-            userId: user.id,
-            expiresAt,
-         },
-      });
-
-      const response: AuthResponse = {
-         accessToken,
-         refreshToken,
-         user: {
-            id: user.id,
-            email: user.email,
-            role: user.role,
-            emailVerified: user.emailVerified,
-         },
-      };
-
-      return response;
+      return this.issueAuthTokens(user, data.device, data.meta);
    }
 
    /**
     * Verify registration OTP and publish to RabbitMQ
     * Returns access and refresh tokens
     */
-   async verifyRegistrationOTP(data: VerifyOTPRequest): Promise<AuthResponse> {
+   async verifyRegistrationOTP(
+      data: VerifyOTPRequest & { meta?: DeviceRequestMeta },
+   ): Promise<AuthResponse> {
       const { email, otp, firstName, lastName } = data;
 
       // Find user
@@ -172,19 +152,7 @@ export class AuthService {
          data: { emailVerified: true },
       });
 
-      // Generate tokens
-      const accessToken = this.generateAccessToken(updatedUser);
-      const refreshToken = TokenUtils.generateRefreshToken();
-      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-
-      // Store refresh token
-      await prisma.refreshToken.create({
-         data: {
-            token: refreshToken,
-            userId: updatedUser.id,
-            expiresAt,
-         },
-      });
+      const authResponse = await this.issueAuthTokens(updatedUser, data.device, data.meta);
 
       // Publish user created event to RabbitMQ after OTP verification
       try {
@@ -194,24 +162,13 @@ export class AuthService {
          // Don't fail if RabbitMQ publishing fails, OTP is already verified
       }
 
-      const response: AuthResponse = {
-         accessToken,
-         refreshToken,
-         user: {
-            id: updatedUser.id,
-            email: updatedUser.email,
-            role: updatedUser.role,
-            emailVerified: updatedUser.emailVerified,
-         },
-      };
-
-      return response;
+      return authResponse;
    }
 
    /**
     * Mobile login with PKCE
     */
-   async mobileLogin(data: MobileLoginRequest): Promise<AuthResponse> {
+   async mobileLogin(data: MobileLoginRequest & { meta?: DeviceRequestMeta }): Promise<AuthResponse> {
       const { email, password, codeChallenge, codeChallengeMethod, app } = data;
 
       // Validate PKCE parameters
@@ -220,7 +177,15 @@ export class AuthService {
       }
 
       // Perform regular login first (pass app attribute if present)
-      const loginData: LoginRequest = { email, password, clientType: 'mobile' };
+      const loginData: LoginRequest & { meta?: DeviceRequestMeta } = {
+         email,
+         password,
+         clientType: 'mobile',
+         device: data.device,
+      };
+      if (data.meta) {
+         loginData.meta = data.meta;
+      }
       if (app) {
          loginData.app = app;
       }
@@ -260,6 +225,8 @@ export class AuthService {
          throw new Error('Token has been reused. All sessions revoked for security.');
       }
 
+      await userDeviceService.assertDeviceExistsForRefresh(tokenRecord.userDeviceId);
+
       // Generate new tokens
       const newAccessToken = this.generateAccessToken(tokenRecord.user);
       const newRefreshToken = TokenUtils.generateRefreshToken();
@@ -271,11 +238,12 @@ export class AuthService {
          data: { replacedBy: newRefreshToken },
       });
 
-      // Create new refresh token
+      // Create new refresh token (preserve device binding)
       await prisma.refreshToken.create({
          data: {
             token: newRefreshToken,
             userId: tokenRecord.userId,
+            userDeviceId: tokenRecord.userDeviceId,
             expiresAt,
          },
       });
@@ -550,7 +518,7 @@ export class AuthService {
     * Google OAuth authentication
     * Verifies Google token and handles signup/login flow
     */
-   async googleOAuth(data: GoogleOAuthRequest): Promise<AuthResponse> {
+   async googleOAuth(data: GoogleOAuthRequest & { meta?: DeviceRequestMeta }): Promise<AuthResponse> {
       const { token, app } = data;
 
       // Verify Google token
@@ -629,30 +597,7 @@ export class AuthService {
          }
       }
 
-      // Generate tokens (same as login flow)
-      const accessToken = this.generateAccessToken(user);
-      const refreshToken = TokenUtils.generateRefreshToken();
-      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-
-      // Store refresh token
-      await prisma.refreshToken.create({
-         data: {
-            token: refreshToken,
-            userId: user.id,
-            expiresAt,
-         },
-      });
-
-      return {
-         accessToken,
-         refreshToken,
-         user: {
-            id: user.id,
-            email: user.email,
-            role: user.role,
-            emailVerified: user.emailVerified,
-         },
-      };
+      return this.issueAuthTokens(user, data.device, data.meta);
    }
 
    /**
@@ -674,6 +619,48 @@ export class AuthService {
          emailVerified: user.emailVerified,
          createdAt: user.createdAt,
          updatedAt: user.updatedAt,
+      };
+   }
+
+   /**
+    * Resolve device, issue access + refresh tokens, persist refresh token.
+    */
+   private async issueAuthTokens(
+      user: User,
+      device: DeviceContext,
+      meta?: DeviceRequestMeta,
+   ): Promise<AuthResponse> {
+      const userDevice = await userDeviceService.resolveDeviceForAuth(
+         user.id,
+         user.role,
+         device,
+         meta,
+      );
+
+      const accessToken = this.generateAccessToken(user);
+      const refreshToken = TokenUtils.generateRefreshToken();
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+      await prisma.refreshToken.create({
+         data: {
+            token: refreshToken,
+            userId: user.id,
+            userDeviceId: userDevice?.id ?? null,
+            expiresAt,
+            userAgent: meta?.userAgent ?? null,
+            ipAddress: meta?.ipAddress ?? null,
+         },
+      });
+
+      return {
+         accessToken,
+         refreshToken,
+         user: {
+            id: user.id,
+            email: user.email,
+            role: user.role,
+            emailVerified: user.emailVerified,
+         },
       };
    }
 

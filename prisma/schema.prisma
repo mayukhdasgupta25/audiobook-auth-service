@@ -48,8 +48,49 @@ model User {
    otpTokens               OtpToken[]
    emailLogs               EmailLog[]
    subscriptions           UserSubscription[]
+   devices                   UserDevice[]
+   deviceChanges             UserDeviceChange[]
 
    @@map("users")
+}
+
+enum UserDeviceChangeType {
+   ADDED
+   REMOVED
+}
+
+model UserDevice {
+   id         String   @id @default(uuid())
+   userId     String
+   deviceId   String
+   deviceName String?
+   platform   String?
+   userAgent  String?
+   ipAddress  String?
+   lastSeenAt DateTime @default(now())
+   createdAt  DateTime @default(now())
+
+   user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+   refreshTokens RefreshToken[]
+   deviceChanges UserDeviceChange[]
+
+   @@unique([userId, deviceId])
+   @@index([userId])
+   @@map("user_devices")
+}
+
+model UserDeviceChange {
+   id           String               @id @default(uuid())
+   userId       String
+   type         UserDeviceChangeType
+   userDeviceId String?
+   createdAt    DateTime             @default(now())
+
+   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+   userDevice UserDevice? @relation(fields: [userDeviceId], references: [id], onDelete: SetNull)
+
+   @@index([userId, createdAt])
+   @@map("user_device_changes")
 }
 
 enum BillingInterval {
@@ -164,19 +205,22 @@ model SubscriptionBillingEvent {
 }
 
 model RefreshToken {
-   id         String   @id @default(uuid())
-   token      String   @unique
-   userId     String
-   expiresAt  DateTime
-   createdAt  DateTime @default(now())
-   isRevoked  Boolean  @default(false)
-   replacedBy String? // ID of the token that replaced this one
-   userAgent  String?
-   ipAddress  String?
+   id           String   @id @default(uuid())
+   token        String   @unique
+   userId       String
+   userDeviceId String?
+   expiresAt    DateTime
+   createdAt    DateTime @default(now())
+   isRevoked    Boolean  @default(false)
+   replacedBy   String? // ID of the token that replaced this one
+   userAgent    String?
+   ipAddress    String?
 
    // Relations
-   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+   userDevice UserDevice? @relation(fields: [userDeviceId], references: [id], onDelete: SetNull)
 
+   @@index([userDeviceId])
    @@map("refresh_tokens")
 }
 
