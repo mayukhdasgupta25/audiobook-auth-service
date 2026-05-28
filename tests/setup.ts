@@ -87,6 +87,10 @@ jest.mock('@prisma/client', () => {
       RENEWAL_RETRY_FAILED: 'RENEWAL_RETRY_FAILED',
       PLAN_CHANGE_SCHEDULED: 'PLAN_CHANGE_SCHEDULED',
    },
+   UserDeviceChangeType: {
+      ADDED: 'ADDED',
+      REMOVED: 'REMOVED',
+   },
    };
 });
 

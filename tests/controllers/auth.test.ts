@@ -62,6 +62,7 @@ describe('AuthController', () => {
       mockRequest = {
          body: {},
          cookies: {},
+         headers: {},
       };
    });
 
@@ -131,15 +132,19 @@ describe('AuthController', () => {
             email: 'test@example.com',
             password: 'password123',
             clientType: 'browser',
+            device: { deviceId: 'device-uuid-1' },
          };
 
          await authController.login(mockRequest as Request, mockResponse as Response);
 
-         expect(authService.login).toHaveBeenCalledWith({
-            email: 'test@example.com',
-            password: 'password123',
-            clientType: 'browser',
-         });
+         expect(authService.login).toHaveBeenCalledWith(
+            expect.objectContaining({
+               email: 'test@example.com',
+               password: 'password123',
+               clientType: 'browser',
+               device: { deviceId: 'device-uuid-1' },
+            }),
+         );
          expect(mockCookie).toHaveBeenCalledWith('refreshToken', 'refresh-token', {
             httpOnly: true,
             secure: false,
@@ -166,6 +171,7 @@ describe('AuthController', () => {
             email: 'test@example.com',
             password: 'password123',
             clientType: 'mobile',
+            device: { deviceId: 'device-uuid-1' },
          };
 
          await authController.login(mockRequest as Request, mockResponse as Response);
@@ -182,7 +188,11 @@ describe('AuthController', () => {
             new Error('Invalid email or password')
          );
 
-         mockRequest.body = { email: 'test@example.com', password: 'wrong' };
+         mockRequest.body = {
+            email: 'test@example.com',
+            password: 'wrong',
+            device: { deviceId: 'device-uuid-1' },
+         };
 
          await authController.login(mockRequest as Request, mockResponse as Response);
 
@@ -190,6 +200,18 @@ describe('AuthController', () => {
          expect(mockJson).toHaveBeenCalledWith({
             error: 'Invalid email or password',
          });
+      });
+
+      test('should return 400 when deviceId is missing', async () => {
+         mockRequest.body = { email: 'test@example.com', password: 'password123' };
+
+         await authController.login(mockRequest as Request, mockResponse as Response);
+
+         expect(mockStatus).toHaveBeenCalledWith(400);
+         expect(mockJson).toHaveBeenCalledWith(
+            expect.objectContaining({ code: 'DEVICE_ID_REQUIRED' }),
+         );
+         expect(authService.login).not.toHaveBeenCalled();
       });
    });
 

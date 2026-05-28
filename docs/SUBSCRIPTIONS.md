@@ -55,6 +55,8 @@ Skips if any plans already exist. Optional `SUBSCRIPTION_CURRENCY` (default `INR
 
 Plan API responses include `features` (raw JSON) and `featureDescriptions` (sentences from `config/subscription-plan-features.en.yml`).
 
+Plan `features.maxDevices` and `features.deviceChangesPerMonth` are enforced at login via device registration. See [DEVICES.md](./DEVICES.md).
+
 ## Plan changes (upgrade / downgrade)
 
 `POST /auth/subscriptions/:id/change-plan` with `{ "planId": "<cuid>" }`.
