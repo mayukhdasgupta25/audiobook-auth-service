@@ -21,6 +21,7 @@ enum OtpPurpose {
    EMAIL_UPDATE
    PASSWORD_UPDATE
    PASSWORD_RESET
+   DEVICE_REMOVAL
 }
 
 enum EmailType {

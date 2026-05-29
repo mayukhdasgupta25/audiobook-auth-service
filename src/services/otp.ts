@@ -67,6 +67,10 @@ export class OTPService {
       // Generate OTP
       const otpCode = this.generateOTP();
 
+      if (purpose === OtpPurpose.DEVICE_REMOVAL) {
+         console.log(`[DEVICE_REMOVAL OTP] email=${userEmail} otp=${otpCode}`);
+      }
+
       // Hash OTP using Argon2 (same as passwords for security)
       const otpHash = await PasswordUtils.hashPassword(otpCode);
 
@@ -199,6 +203,39 @@ export class OTPService {
       const cooldownMs = this.RESEND_COOLDOWN_SECONDS * 1000;
 
       return timeSinceCreation >= cooldownMs;
+   }
+
+   /**
+    * Resend cooldown state for an active (unexpired, unverified) OTP.
+    * remainingSeconds is 0 when resend is allowed; >0 when still in cooldown.
+    */
+   async getResendCooldownState(
+      userId: string,
+      purpose: OtpPurpose,
+   ): Promise<{ hasActiveOtp: boolean; remainingSeconds: number }> {
+      const existingOTP = await prisma.otpToken.findFirst({
+         where: {
+            userId,
+            purpose,
+            isVerified: false,
+            invalidatedAt: null,
+            expiresAt: { gt: new Date() },
+         },
+         orderBy: { createdAt: 'desc' },
+      });
+
+      if (!existingOTP) {
+         return { hasActiveOtp: false, remainingSeconds: 0 };
+      }
+
+      const elapsedMs = Date.now() - existingOTP.createdAt.getTime();
+      const cooldownMs = this.RESEND_COOLDOWN_SECONDS * 1000;
+      const remainingMs = Math.max(0, cooldownMs - elapsedMs);
+
+      return {
+         hasActiveOtp: true,
+         remainingSeconds: Math.ceil(remainingMs / 1000),
+      };
    }
 
    /**

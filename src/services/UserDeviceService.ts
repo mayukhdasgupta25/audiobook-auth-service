@@ -4,10 +4,15 @@ import {
    UserDevice,
    UserDeviceChangeType,
    SubscriptionStatus,
+   OtpPurpose,
 } from '@prisma/client';
 import { AuthError } from '../types';
 import type { DeviceContext, DeviceRequestMeta } from '../types';
-import { getCalendarMonthBounds, parsePlanFeatures, resolveMaxDevices } from '../utils/deviceLimits';
+import { getCalendarMonthBounds, parsePlanFeatures, resolveDeviceChangesPerMonth, resolveMaxDevices } from '../utils/deviceLimits';
+import { otpService } from './otp';
+
+export const DEVICE_REMOVAL_OTP_GENERIC_MESSAGE =
+   'If the account and device are eligible, an OTP has been sent to your email.';
 
 export interface UserDeviceDto {
    id: string;
@@ -36,7 +41,7 @@ function toUserDeviceDto(device: UserDevice): UserDeviceDto {
 }
 
 export class UserDeviceService {
-   constructor(private prisma: PrismaClient) {}
+   constructor(private prisma: PrismaClient) { }
 
    async getMaxDevicesForUser(userId: string): Promise<number> {
       const features = await this.getPlanFeaturesForUser(userId);
@@ -142,14 +147,144 @@ export class UserDeviceService {
    }
 
    async removeDevice(userId: string, deviceRowId: string): Promise<void> {
-      const device = await this.prisma.userDevice.findFirst({
-         where: { id: deviceRowId, userId },
-      });
+      const device = await this.findDeviceForUser(userId, deviceRowId);
 
       if (!device) {
          throw new AuthError('Device not found', 404, 'DEVICE_NOT_FOUND');
       }
 
+      await this.assertUserCanRemoveDevice(userId);
+
+      await this.prisma.$transaction(async (tx) => {
+         await tx.refreshToken.updateMany({
+            where: { userDeviceId: device.id, isRevoked: false },
+            data: { isRevoked: true },
+         });
+
+         await tx.userDeviceChange.create({
+            data: {
+               userId,
+               type: UserDeviceChangeType.REMOVED,
+               userDeviceId: device.id,
+            },
+         });
+
+         await tx.userDevice.delete({ where: { id: device.id } });
+      });
+   }
+
+   /**
+    * Request OTP for device removal. Silent no-op when email/device/quota checks fail.
+    */
+   async requestDeviceRemovalOtp(email: string, deviceRowId: string): Promise<void> {
+      const user = await this.prisma.user.findUnique({
+         where: { email: email.toLowerCase() },
+      });
+
+      if (!user) {
+         return;
+      }
+
+      const device = await this.findDeviceForUser(user.id, deviceRowId);
+      if (!device) {
+         return;
+      }
+
+      const canRemove = await this.userCanRemoveDevice(user.id);
+      if (!canRemove) {
+         return;
+      }
+
+      try {
+         await otpService.createOTP(user.id, OtpPurpose.DEVICE_REMOVAL, user.email);
+      } catch (error) {
+         console.error('Failed to create device removal OTP:', error);
+      }
+   }
+
+   /**
+    * Resend device removal OTP. Requires an active OTP and 30s since it was generated.
+    */
+   async resendDeviceRemovalOtp(email: string, deviceRowId: string): Promise<void> {
+      const user = await this.prisma.user.findUnique({
+         where: { email: email.toLowerCase() },
+      });
+
+      if (!user) {
+         throw new AuthError('User not found', 404, 'USER_NOT_FOUND');
+      }
+
+      const device = await this.findDeviceForUser(user.id, deviceRowId);
+      if (!device) {
+         throw new AuthError('Device not found', 404, 'DEVICE_NOT_FOUND');
+      }
+
+      await this.assertUserCanRemoveDevice(user.id);
+
+      const cooldown = await otpService.getResendCooldownState(
+         user.id,
+         OtpPurpose.DEVICE_REMOVAL,
+      );
+
+      if (!cooldown.hasActiveOtp) {
+         throw new AuthError(
+            'No active device removal OTP found. Request a new OTP first.',
+            400,
+            'DEVICE_REMOVAL_OTP_NOT_FOUND',
+         );
+      }
+
+      if (cooldown.remainingSeconds > 0) {
+         throw new AuthError(
+            `Please wait ${cooldown.remainingSeconds} seconds before resending the OTP`,
+            429,
+            'OTP_RESEND_COOLDOWN',
+            { remainingSeconds: cooldown.remainingSeconds },
+         );
+      }
+
+      await otpService.createOTP(user.id, OtpPurpose.DEVICE_REMOVAL, user.email);
+   }
+
+   /**
+    * Verify OTP and remove a device without JWT authentication.
+    */
+   async removeDeviceWithOtp(email: string, otp: string, deviceRowId: string): Promise<void> {
+      const user = await this.prisma.user.findUnique({
+         where: { email: email.toLowerCase() },
+      });
+
+      if (!user) {
+         throw new AuthError('User not found', 404, 'USER_NOT_FOUND');
+      }
+
+      try {
+         await otpService.verifyOTP(user.id, otp, OtpPurpose.DEVICE_REMOVAL);
+      } catch (error) {
+         const message = error instanceof Error ? error.message : 'Invalid OTP';
+         throw new AuthError(message, 400, 'INVALID_OTP');
+      }
+
+      await this.removeDevice(user.id, deviceRowId);
+   }
+
+   private async findDeviceForUser(userId: string, deviceRowId: string): Promise<UserDevice | null> {
+      return this.prisma.userDevice.findFirst({
+         where: { id: deviceRowId, userId },
+      });
+   }
+
+   private async userCanRemoveDevice(userId: string): Promise<boolean> {
+      const deviceChangesPerMonth = await this.getDeviceChangesPerMonthForUser(userId);
+      if (deviceChangesPerMonth === 0) {
+         return false;
+      }
+
+      const remaining = await this.getRemainingDeviceChanges(userId);
+      return remaining > 0;
+   }
+
+   private async assertUserCanRemoveDevice(userId: string): Promise<void> {
       const deviceChangesPerMonth = await this.getDeviceChangesPerMonthForUser(userId);
 
       if (deviceChangesPerMonth === 0) {
@@ -168,23 +303,6 @@ export class UserDeviceService {
             'DEVICE_CHANGE_QUOTA_EXCEEDED',
          );
       }
-
-      await this.prisma.$transaction(async (tx) => {
-         await tx.refreshToken.updateMany({
-            where: { userDeviceId: device.id, isRevoked: false },
-            data: { isRevoked: true },
-         });
-
-         await tx.userDeviceChange.create({
-            data: {
-               userId,
-               type: UserDeviceChangeType.REMOVED,
-               userDeviceId: device.id,
-            },
-         });
-
-         await tx.userDevice.delete({ where: { id: device.id } });
-      });
    }
 
    async revokeRefreshTokensForDevice(userDeviceId: string): Promise<void> {
@@ -212,10 +330,7 @@ export class UserDeviceService {
 
    private async getDeviceChangesPerMonthForUser(userId: string): Promise<number> {
       const features = await this.getPlanFeaturesForUser(userId);
-      if (!features) {
-         return 0;
-      }
-      return features.deviceChangesPerMonth;
+      return resolveDeviceChangesPerMonth(features);
    }
 
    private async getPlanFeaturesForUser(userId: string) {
