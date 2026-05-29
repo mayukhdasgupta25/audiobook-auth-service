@@ -91,6 +91,14 @@ jest.mock('@prisma/client', () => {
       ADDED: 'ADDED',
       REMOVED: 'REMOVED',
    },
+   OtpPurpose: {
+      LOGIN: 'LOGIN',
+      REGISTRATION: 'REGISTRATION',
+      EMAIL_UPDATE: 'EMAIL_UPDATE',
+      PASSWORD_UPDATE: 'PASSWORD_UPDATE',
+      PASSWORD_RESET: 'PASSWORD_RESET',
+      DEVICE_REMOVAL: 'DEVICE_REMOVAL',
+   },
    };
 });
 

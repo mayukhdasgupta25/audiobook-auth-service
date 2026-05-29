@@ -233,3 +233,13 @@ export interface ResetPasswordRequest {
    email: string;
    newPassword: string;
 }
+
+export interface RequestDeviceRemovalOtpRequest {
+   email: string;
+   deviceId: string;
+}
+
+export interface RemoveDeviceWithOtpRequest {
+   email: string;
+   otp: string;
+}

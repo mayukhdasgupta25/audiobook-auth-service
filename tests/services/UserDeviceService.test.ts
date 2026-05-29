@@ -1,6 +1,15 @@
-import { Role, UserDeviceChangeType } from '@prisma/client';
+jest.mock('../../src/services/otp', () => ({
+   otpService: {
+      createOTP: jest.fn(),
+      verifyOTP: jest.fn(),
+      getResendCooldownState: jest.fn(),
+   },
+}));
+
+import { OtpPurpose, Role, UserDeviceChangeType } from '@prisma/client';
 import { UserDeviceService } from '../../src/services/UserDeviceService';
 import { AuthError } from '../../src/types';
+import { otpService } from '../../src/services/otp';
 
 const standardFeatures = {
    audiobookCatalog: 'curated_wide' as const,
@@ -17,6 +26,9 @@ const premiumFeatures = {
 };
 
 const mockPrisma = {
+   user: {
+      findUnique: jest.fn(),
+   },
    userDevice: {
       findUnique: jest.fn(),
       findFirst: jest.fn(),
@@ -149,7 +161,31 @@ describe('UserDeviceService', () => {
    });
 
    describe('removeDevice', () => {
-      it('rejects remove when plan has zero device changes', async () => {
+      it('allows one remove per month when user has no subscription', async () => {
+         mockPrisma.userDevice.findFirst.mockResolvedValue({
+            id: 'dev-1',
+            userId: 'user-1',
+            deviceId: 'client-1',
+         });
+         mockPrisma.userDeviceChange.count.mockResolvedValue(0);
+
+         await service.removeDevice('user-1', 'dev-1');
+
+         expect(mockPrisma.userDevice.delete).toHaveBeenCalledWith({ where: { id: 'dev-1' } });
+      });
+
+      it('rejects remove when subscribed plan has zero device changes', async () => {
+         mockPrisma.userSubscription.findFirst.mockResolvedValue({
+            plan: {
+               id: 'plan',
+               features: {
+                  audiobookCatalog: 'selected',
+                  maxDevices: 1,
+                  audioQuality: 'base',
+                  deviceChangesPerMonth: 0,
+               },
+            },
+         });
          mockPrisma.userDevice.findFirst.mockResolvedValue({
             id: 'dev-1',
             userId: 'user-1',
@@ -201,6 +237,127 @@ describe('UserDeviceService', () => {
          await expect(service.removeDevice('user-1', 'dev-1')).rejects.toMatchObject({
             code: 'DEVICE_CHANGE_QUOTA_EXCEEDED',
          });
+      });
+   });
+
+   describe('requestDeviceRemovalOtp', () => {
+      it('does not send OTP when user is not found', async () => {
+         mockPrisma.user.findUnique.mockResolvedValue(null);
+
+         await service.requestDeviceRemovalOtp('missing@example.com', 'dev-1');
+
+         expect(otpService.createOTP).not.toHaveBeenCalled();
+      });
+
+      it('does not send OTP when device is not owned by user', async () => {
+         mockPrisma.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'user@example.com' });
+         mockPrisma.userDevice.findFirst.mockResolvedValue(null);
+
+         await service.requestDeviceRemovalOtp('user@example.com', 'dev-1');
+
+         expect(otpService.createOTP).not.toHaveBeenCalled();
+      });
+
+      it('sends OTP when user, device, and quota checks pass', async () => {
+         mockPrisma.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'user@example.com' });
+         mockPrisma.userDevice.findFirst.mockResolvedValue({ id: 'dev-1', userId: 'user-1' });
+         mockPrisma.userSubscription.findFirst.mockResolvedValue({
+            plan: { id: 'plan', features: premiumFeatures },
+         });
+         mockPrisma.userDeviceChange.count.mockResolvedValue(0);
+
+         await service.requestDeviceRemovalOtp('user@example.com', 'dev-1');
+
+         expect(otpService.createOTP).toHaveBeenCalledWith(
+            'user-1',
+            OtpPurpose.DEVICE_REMOVAL,
+            'user@example.com',
+         );
+      });
+   });
+
+   describe('resendDeviceRemovalOtp', () => {
+      it('rejects when no active OTP exists', async () => {
+         mockPrisma.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'user@example.com' });
+         mockPrisma.userDevice.findFirst.mockResolvedValue({ id: 'dev-1', userId: 'user-1' });
+         mockPrisma.userDeviceChange.count.mockResolvedValue(0);
+         (otpService.getResendCooldownState as jest.Mock).mockResolvedValue({
+            hasActiveOtp: false,
+            remainingSeconds: 0,
+         });
+
+         await expect(
+            service.resendDeviceRemovalOtp('user@example.com', 'dev-1'),
+         ).rejects.toMatchObject({ code: 'DEVICE_REMOVAL_OTP_NOT_FOUND' });
+      });
+
+      it('rejects when 30s cooldown has not elapsed', async () => {
+         mockPrisma.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'user@example.com' });
+         mockPrisma.userDevice.findFirst.mockResolvedValue({ id: 'dev-1', userId: 'user-1' });
+         mockPrisma.userDeviceChange.count.mockResolvedValue(0);
+         (otpService.getResendCooldownState as jest.Mock).mockResolvedValue({
+            hasActiveOtp: true,
+            remainingSeconds: 12,
+         });
+
+         await expect(
+            service.resendDeviceRemovalOtp('user@example.com', 'dev-1'),
+         ).rejects.toMatchObject({
+            code: 'OTP_RESEND_COOLDOWN',
+            statusCode: 429,
+            details: { remainingSeconds: 12 },
+         });
+      });
+
+      it('sends new OTP when cooldown has elapsed', async () => {
+         mockPrisma.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'user@example.com' });
+         mockPrisma.userDevice.findFirst.mockResolvedValue({ id: 'dev-1', userId: 'user-1' });
+         mockPrisma.userDeviceChange.count.mockResolvedValue(0);
+         (otpService.getResendCooldownState as jest.Mock).mockResolvedValue({
+            hasActiveOtp: true,
+            remainingSeconds: 0,
+         });
+
+         await service.resendDeviceRemovalOtp('user@example.com', 'dev-1');
+
+         expect(otpService.createOTP).toHaveBeenCalledWith(
+            'user-1',
+            OtpPurpose.DEVICE_REMOVAL,
+            'user@example.com',
+         );
+      });
+   });
+
+   describe('removeDeviceWithOtp', () => {
+      it('throws INVALID_OTP when verification fails', async () => {
+         mockPrisma.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'user@example.com' });
+         (otpService.verifyOTP as jest.Mock).mockRejectedValue(new Error('Invalid OTP'));
+
+         await expect(
+            service.removeDeviceWithOtp('user@example.com', '000000', 'dev-1'),
+         ).rejects.toMatchObject({ code: 'INVALID_OTP', statusCode: 400 });
+      });
+
+      it('removes device after successful OTP verification', async () => {
+         mockPrisma.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'user@example.com' });
+         (otpService.verifyOTP as jest.Mock).mockResolvedValue(true);
+         mockPrisma.userSubscription.findFirst.mockResolvedValue({
+            plan: { id: 'plan', features: premiumFeatures },
+         });
+         mockPrisma.userDevice.findFirst.mockResolvedValue({
+            id: 'dev-1',
+            userId: 'user-1',
+         });
+         mockPrisma.userDeviceChange.count.mockResolvedValue(0);
+
+         await service.removeDeviceWithOtp('user@example.com', '123456', 'dev-1');
+
+         expect(otpService.verifyOTP).toHaveBeenCalledWith(
+            'user-1',
+            '123456',
+            OtpPurpose.DEVICE_REMOVAL,
+         );
+         expect(mockPrisma.userDevice.delete).toHaveBeenCalledWith({ where: { id: 'dev-1' } });
       });
    });
 

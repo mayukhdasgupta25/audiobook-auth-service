@@ -124,11 +124,11 @@ export class AuthController {
             return;
          }
 
-         // Purpose must be specified (REGISTRATION, EMAIL_UPDATE, or PASSWORD_UPDATE)
+         // Purpose must be specified (REGISTRATION, EMAIL_UPDATE, PASSWORD_UPDATE, or DEVICE_REMOVAL)
          const purpose = (req.body as any).purpose;
          if (!purpose || purpose === OtpPurpose.LOGIN) {
             res.status(400).json({
-               error: 'Purpose is required and must be REGISTRATION, EMAIL_UPDATE, or PASSWORD_UPDATE',
+               error: 'Purpose is required and must be REGISTRATION, EMAIL_UPDATE, PASSWORD_UPDATE, or DEVICE_REMOVAL',
             });
             return;
          }
