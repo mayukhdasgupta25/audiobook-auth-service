@@ -1,9 +1,8 @@
 import { BillingInterval, Prisma, PrismaClient } from '@prisma/client';
+import { config } from '../src/config/env';
 import { SubscriptionPlanFeatures } from '../src/types/subscriptionPlanFeatures';
 
 const prisma = new PrismaClient();
-
-const SUBSCRIPTION_CURRENCY = process.env['SUBSCRIPTION_CURRENCY'] ?? 'INR';
 
 const PLANS: Array<{
    name: string;
@@ -65,7 +64,7 @@ async function main(): Promise<void> {
             name: plan.name,
             description: plan.description,
             price: new Prisma.Decimal(plan.price),
-            currency: SUBSCRIPTION_CURRENCY,
+            currency: config.SUBSCRIPTION_CURRENCY,
             tierLevel: plan.tierLevel,
             billingInterval: BillingInterval.MONTHLY,
             trialDays: 0,

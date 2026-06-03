@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { appLogger } from '../utils/logger';
 import rateLimit from 'express-rate-limit';
 import { JWTUtils } from '../utils/crypto';
 import { redisService } from '../services/redis';
@@ -141,7 +142,7 @@ export const errorHandler = (
    res: Response,
    _next: NextFunction
 ): void => {
-   console.error('Error:', error);
+   appLogger.error({ err: error }, 'Request error');
 
    // Handle specific error types
    if (error instanceof ValidationError) {
@@ -223,7 +224,10 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction): 
 
    res.on('finish', () => {
       const duration = Date.now() - start;
-      console.log(`${req.method} ${req.path} ${res.statusCode} - ${duration}ms`);
+      appLogger.info(
+         { method: req.method, path: req.path, statusCode: res.statusCode, durationMs: duration },
+         'HTTP request'
+      );
    });
 
    next();

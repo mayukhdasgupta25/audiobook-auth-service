@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { CryptoUtils } from '../utils/crypto';
 import { config } from '../config/env';
 import { redisService } from '../services/redis';
+import { appLogger, redisLogger } from '../utils/logger';
 
 /**
  * JWKS controller for providing public keys for JWT verification
@@ -25,17 +26,17 @@ export class JWKSController {
             storedKeyHash = await redisService.getKeyHash();
          } catch (error) {
             if (config.NODE_ENV !== 'test') {
-               console.warn('Failed to get key hash from Redis, continuing without cache:', error);
+               redisLogger.warn({ err: error }, 'Failed to get key hash from Redis, continuing without cache');
             }
          }
 
          // If key hash has changed, invalidate the cache
          if (storedKeyHash && storedKeyHash !== currentKeyHash) {
-            console.log('Key rotation detected, invalidating JWKS cache');
+            appLogger.info('Key rotation detected, invalidating JWKS cache');
             try {
                await redisService.invalidateJWKSCache();
             } catch (error) {
-               console.error('Failed to invalidate cache:', error);
+               redisLogger.error({ err: error }, 'Failed to invalidate JWKS cache');
             }
          }
 
@@ -44,13 +45,13 @@ export class JWKSController {
          try {
             jwks = await redisService.getCachedJWKS();
             if (jwks) {
-               console.log('JWKS cache hit');
+               redisLogger.info('JWKS cache hit');
             } else {
-               console.log('JWKS cache miss');
+               redisLogger.info('JWKS cache miss');
             }
          } catch (error) {
             if (config.NODE_ENV !== 'test') {
-               console.warn('Failed to get cached JWKS, generating new one:', error);
+               redisLogger.warn({ err: error }, 'Failed to get cached JWKS, generating new one');
             }
          }
 
@@ -61,10 +62,10 @@ export class JWKSController {
             // Cache the JWKS for 1 hour
             try {
                await redisService.cacheJWKS(jwks, 3600);
-               console.log('JWKS cached successfully');
+               redisLogger.info('JWKS cached successfully');
             } catch (error) {
                if (config.NODE_ENV !== 'test') {
-                  console.warn('Failed to cache JWKS, continuing without cache:', error);
+                  redisLogger.warn({ err: error }, 'Failed to cache JWKS, continuing without cache');
                }
             }
          }
@@ -73,10 +74,10 @@ export class JWKSController {
          if (!storedKeyHash || storedKeyHash !== currentKeyHash) {
             try {
                await redisService.storeKeyHash(currentKeyHash);
-               console.log('Key hash updated');
+               redisLogger.info('Key hash updated');
             } catch (error) {
                if (config.NODE_ENV !== 'test') {
-                  console.warn('Failed to store key hash:', error);
+                  redisLogger.warn({ err: error }, 'Failed to store key hash');
                }
             }
          }
@@ -87,7 +88,7 @@ export class JWKSController {
 
          res.json(jwks);
       } catch (error) {
-         console.error('Failed to generate JWKS:', error);
+         appLogger.error({ err: error }, 'Failed to generate JWKS');
          res.status(500).json({
             error: 'Failed to generate JWKS',
          });

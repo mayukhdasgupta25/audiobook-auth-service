@@ -8,13 +8,9 @@ yarn-error.log*
 dist/
 build/
 
-# Environment variables
-.env
-.env.local
-.env.development
-.env.staging
-.env.test
-.env.production
+# Environment variables (keep committed *.example templates)
+.env*
+!.env*.example
 
 # Database
 *.db

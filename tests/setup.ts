@@ -15,13 +15,28 @@ const testKeys = {
 };
 
 // Set all required environment variables before any config-dependent imports
+process.env['PORT'] = '8082';
 process.env['DATABASE_URL'] = 'postgresql://test:test@localhost:5432/test_auth_service';
+process.env['SUBSCRIPTION_CURRENCY'] = 'INR';
 process.env['REDIS_URL'] = 'redis://localhost:6379';
 process.env['RABBITMQ_URL'] = 'amqp://localhost:5672';
+process.env['RABBITMQ_EXCHANGE'] = 'users';
 process.env['JWT_PRIVATE_KEY'] = testKeys.privateKey;
 process.env['JWT_PUBLIC_KEY'] = testKeys.publicKey;
 process.env['JWT_KEY_ID'] = 'test-key-1';
 process.env['JWT_ISSUER'] = 'test-auth-service';
+process.env['JWT_ACCESS_TOKEN_EXPIRY'] = '7d';
+process.env['JWT_REFRESH_TOKEN_EXPIRY'] = '7d';
+process.env['CORS_ORIGINS'] = 'http://localhost:3000';
+process.env['RATE_LIMIT_WINDOW_MS'] = '900000';
+process.env['RATE_LIMIT_MAX_REQUESTS'] = '100';
+process.env['EMAIL_FROM'] = 'test@example.com';
+process.env['EMAIL_SERVICE_URL'] = '';
+process.env['GOOGLE_CLIENT_ID'] = '';
+process.env['ARGON2_MEMORY'] = '65536';
+process.env['ARGON2_ITERATIONS'] = '3';
+process.env['ARGON2_PARALLELISM'] = '4';
+process.env['LOG_LEVEL'] = 'error';
 
 // Now safe to import modules that depend on config
 // (No imports needed here - tests can import what they need)
@@ -29,76 +44,76 @@ process.env['JWT_ISSUER'] = 'test-auth-service';
 // Mock Prisma client for tests
 jest.mock('@prisma/client', () => {
    class MockDecimal {
-      constructor(private value: string | number) {}
+      constructor(private value: string | number) { }
       toString(): string {
          return String(this.value);
       }
    }
    return {
-   Prisma: { Decimal: MockDecimal, JsonNull: null },
-   PrismaClient: jest.fn().mockImplementation(() => ({
-      user: {
-         findUnique: jest.fn(),
-         create: jest.fn(),
-         update: jest.fn(),
-         findMany: jest.fn(),
+      Prisma: { Decimal: MockDecimal, JsonNull: null },
+      PrismaClient: jest.fn().mockImplementation(() => ({
+         user: {
+            findUnique: jest.fn(),
+            create: jest.fn(),
+            update: jest.fn(),
+            findMany: jest.fn(),
+         },
+         refreshToken: {
+            findUnique: jest.fn(),
+            create: jest.fn(),
+            update: jest.fn(),
+            updateMany: jest.fn(),
+         },
+         emailVerificationToken: {
+            findUnique: jest.fn(),
+            create: jest.fn(),
+            update: jest.fn(),
+         },
+         passwordResetToken: {
+            findUnique: jest.fn(),
+            create: jest.fn(),
+            update: jest.fn(),
+         },
+      })),
+      Role: { USER: 'USER', ADMIN: 'ADMIN' },
+      BillingInterval: {
+         MONTHLY: 'MONTHLY',
+         QUARTERLY: 'QUARTERLY',
+         YEARLY: 'YEARLY',
+         LIFETIME: 'LIFETIME',
       },
-      refreshToken: {
-         findUnique: jest.fn(),
-         create: jest.fn(),
-         update: jest.fn(),
-         updateMany: jest.fn(),
+      SubscriptionStatus: {
+         PENDING: 'PENDING',
+         TRIALING: 'TRIALING',
+         ACTIVE: 'ACTIVE',
+         PAST_DUE: 'PAST_DUE',
+         PAUSED: 'PAUSED',
+         CANCELED: 'CANCELED',
+         EXPIRED: 'EXPIRED',
       },
-      emailVerificationToken: {
-         findUnique: jest.fn(),
-         create: jest.fn(),
-         update: jest.fn(),
+      PlanChangeType: {
+         UPGRADE: 'UPGRADE',
+         DOWNGRADE: 'DOWNGRADE',
       },
-      passwordResetToken: {
-         findUnique: jest.fn(),
-         create: jest.fn(),
-         update: jest.fn(),
+      BillingEventType: {
+         PRORATION_CHARGE: 'PRORATION_CHARGE',
+         RENEWAL_CHARGE: 'RENEWAL_CHARGE',
+         RENEWAL_FAILED: 'RENEWAL_FAILED',
+         RENEWAL_RETRY_FAILED: 'RENEWAL_RETRY_FAILED',
+         PLAN_CHANGE_SCHEDULED: 'PLAN_CHANGE_SCHEDULED',
       },
-   })),
-   Role: { USER: 'USER', ADMIN: 'ADMIN' },
-   BillingInterval: {
-      MONTHLY: 'MONTHLY',
-      QUARTERLY: 'QUARTERLY',
-      YEARLY: 'YEARLY',
-      LIFETIME: 'LIFETIME',
-   },
-   SubscriptionStatus: {
-      PENDING: 'PENDING',
-      TRIALING: 'TRIALING',
-      ACTIVE: 'ACTIVE',
-      PAST_DUE: 'PAST_DUE',
-      PAUSED: 'PAUSED',
-      CANCELED: 'CANCELED',
-      EXPIRED: 'EXPIRED',
-   },
-   PlanChangeType: {
-      UPGRADE: 'UPGRADE',
-      DOWNGRADE: 'DOWNGRADE',
-   },
-   BillingEventType: {
-      PRORATION_CHARGE: 'PRORATION_CHARGE',
-      RENEWAL_CHARGE: 'RENEWAL_CHARGE',
-      RENEWAL_FAILED: 'RENEWAL_FAILED',
-      RENEWAL_RETRY_FAILED: 'RENEWAL_RETRY_FAILED',
-      PLAN_CHANGE_SCHEDULED: 'PLAN_CHANGE_SCHEDULED',
-   },
-   UserDeviceChangeType: {
-      ADDED: 'ADDED',
-      REMOVED: 'REMOVED',
-   },
-   OtpPurpose: {
-      LOGIN: 'LOGIN',
-      REGISTRATION: 'REGISTRATION',
-      EMAIL_UPDATE: 'EMAIL_UPDATE',
-      PASSWORD_UPDATE: 'PASSWORD_UPDATE',
-      PASSWORD_RESET: 'PASSWORD_RESET',
-      DEVICE_REMOVAL: 'DEVICE_REMOVAL',
-   },
+      UserDeviceChangeType: {
+         ADDED: 'ADDED',
+         REMOVED: 'REMOVED',
+      },
+      OtpPurpose: {
+         LOGIN: 'LOGIN',
+         REGISTRATION: 'REGISTRATION',
+         EMAIL_UPDATE: 'EMAIL_UPDATE',
+         PASSWORD_UPDATE: 'PASSWORD_UPDATE',
+         PASSWORD_RESET: 'PASSWORD_RESET',
+         DEVICE_REMOVAL: 'DEVICE_REMOVAL',
+      },
    };
 });
 

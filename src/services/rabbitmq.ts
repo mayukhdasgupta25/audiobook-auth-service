@@ -1,5 +1,6 @@
 import amqp from 'amqplib';
 import { config } from '../config/env';
+import { rabbitmqLogger } from '../utils/logger';
 
 /**
  * RabbitMQ service for publishing events
@@ -19,19 +20,19 @@ export class RabbitMQService {
    async connect(): Promise<void> {
       try {
          if (config.NODE_ENV !== 'test') {
-            console.log('Connecting to RabbitMQ...');
+            rabbitmqLogger.info('Connecting to RabbitMQ...');
          }
 
          // Connect to RabbitMQ
          this.connection = await amqp.connect(config.RABBITMQ_URL);
          if (config.NODE_ENV !== 'test') {
-            console.log('Connected to RabbitMQ');
+            rabbitmqLogger.info('Connected to RabbitMQ');
          }
 
          // Create channel
          this.channel = await this.connection.createChannel();
          if (config.NODE_ENV !== 'test') {
-            console.log('Created RabbitMQ channel');
+            rabbitmqLogger.info('Created RabbitMQ channel');
          }
 
          // Set up exchange (topic exchange for routing)
@@ -39,7 +40,7 @@ export class RabbitMQService {
             durable: true, // Exchange survives broker restarts
          });
          if (config.NODE_ENV !== 'test') {
-            console.log(`Exchange '${config.RABBITMQ_EXCHANGE}' asserted`);
+            rabbitmqLogger.info({ exchange: config.RABBITMQ_EXCHANGE }, 'Exchange asserted');
          }
 
          this.isConnected = true;
@@ -47,21 +48,21 @@ export class RabbitMQService {
          // Handle connection close
          this.connection.on('close', () => {
             if (config.NODE_ENV !== 'test') {
-               console.log('RabbitMQ connection closed');
+               rabbitmqLogger.info('RabbitMQ connection closed');
             }
             this.isConnected = false;
          });
 
-         this.connection.on('error', (err: any) => {
+         this.connection.on('error', (err: unknown) => {
             if (config.NODE_ENV !== 'test') {
-               console.error('RabbitMQ connection error:', err);
+               rabbitmqLogger.error({ err }, 'RabbitMQ connection error');
             }
             this.isConnected = false;
          });
 
       } catch (error) {
          if (config.NODE_ENV !== 'test') {
-            console.error('Failed to connect to RabbitMQ:', error);
+            rabbitmqLogger.error({ err: error }, 'Failed to connect to RabbitMQ');
          }
          this.isConnected = false;
          throw error;
@@ -85,11 +86,11 @@ export class RabbitMQService {
 
          this.isConnected = false;
          if (config.NODE_ENV !== 'test') {
-            console.log('Disconnected from RabbitMQ');
+            rabbitmqLogger.info('Disconnected from RabbitMQ');
          }
       } catch (error) {
          if (config.NODE_ENV !== 'test') {
-            console.error('Error disconnecting from RabbitMQ:', error);
+            rabbitmqLogger.error({ err: error }, 'Error disconnecting from RabbitMQ');
          }
       }
    }
@@ -99,6 +100,22 @@ export class RabbitMQService {
     */
    isServiceConnected(): boolean {
       return this.isConnected && this.connection !== null && this.channel !== null;
+   }
+
+   /**
+    * Health check — verifies the exchange is reachable on the open channel
+    */
+   async healthCheck(): Promise<boolean> {
+      if (!this.isServiceConnected()) {
+         return false;
+      }
+
+      try {
+         await this.channel.checkExchange(config.RABBITMQ_EXCHANGE);
+         return true;
+      } catch {
+         return false;
+      }
    }
 
    /**
@@ -136,11 +153,11 @@ export class RabbitMQService {
          }
 
          if (config.NODE_ENV !== 'test') {
-            console.log(`Published user.created event for user ${userId}`);
+            rabbitmqLogger.info({ userId, routingKey }, 'Published user.created event');
          }
       } catch (error) {
          if (config.NODE_ENV !== 'test') {
-            console.error('Error publishing user created event:', error);
+            rabbitmqLogger.error({ err: error, userId }, 'Error publishing user created event');
          }
          throw error;
       }
@@ -172,11 +189,11 @@ export class RabbitMQService {
          }
 
          if (config.NODE_ENV !== 'test') {
-            console.log(`Published event '${routingKey}'`);
+            rabbitmqLogger.info({ routingKey }, 'Published event');
          }
       } catch (error) {
          if (config.NODE_ENV !== 'test') {
-            console.error(`Error publishing event '${routingKey}':`, error);
+            rabbitmqLogger.error({ err: error, routingKey }, 'Error publishing event');
          }
          throw error;
       }
