@@ -10,6 +10,7 @@ import { AuthError } from '../types';
 import type { DeviceContext, DeviceRequestMeta } from '../types';
 import { getCalendarMonthBounds, parsePlanFeatures, resolveDeviceChangesPerMonth, resolveMaxDevices } from '../utils/deviceLimits';
 import { otpService } from './otp';
+import { appLogger } from '../utils/logger';
 
 export const DEVICE_REMOVAL_OTP_GENERIC_MESSAGE =
    'If the account and device are eligible, an OTP has been sent to your email.';
@@ -198,7 +199,7 @@ export class UserDeviceService {
       try {
          await otpService.createOTP(user.id, OtpPurpose.DEVICE_REMOVAL, user.email);
       } catch (error) {
-         console.error('Failed to create device removal OTP:', error);
+         appLogger.error({ err: error }, 'Failed to create device removal OTP');
       }
    }
 
@@ -355,8 +356,9 @@ export class UserDeviceService {
 
       const features = parsePlanFeatures(sub.plan.features);
       if (!features) {
-         console.warn(
-            `User ${userId} has subscription plan ${sub.plan.id} with invalid features JSON; using free-tier device defaults`,
+         appLogger.warn(
+            { userId, planId: sub.plan.id },
+            'Subscription plan has invalid features JSON; using free-tier device defaults'
          );
          return null;
       }

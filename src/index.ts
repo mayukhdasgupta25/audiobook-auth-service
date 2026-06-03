@@ -1,9 +1,8 @@
-import { config } from './config/env';
 import { startServer } from './app';
+import { appLogger } from './utils/logger';
 
-console.log(config.DATABASE_URL)
 // Start the server
 startServer().catch((error) => {
-   console.error('Failed to start server:', error);
+   appLogger.error({ err: error }, 'Failed to start server');
    process.exit(1);
 });

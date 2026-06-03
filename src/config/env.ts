@@ -1,66 +1,140 @@
 import dotenv from "dotenv";
 import path from "path";
 
-const nodeEnv = process.env['NODE_ENV'] || 'development';
-const envFile = `.env${nodeEnv !== 'development' ? `.${nodeEnv}` : ''}`;
-dotenv.config({ path: path.resolve(process.cwd(), envFile) });
+const LOCALHOST_PATTERN = /localhost|127\.0\.0\.1/i;
 
-// Load .env.local for local overrides (highest priority)
-dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
+const ENV_FILE_BY_NODE_ENV: Record<string, string | null> = {
+   development: ".env.development",
+   test: null,
+   testing: ".env.testing",
+   staging: ".env.staging",
+   production: ".env.production",
+};
+
+function getEnvFileForBootstrap(): string | null {
+   const bootstrapEnv = process.env["NODE_ENV"] ?? "development";
+   return ENV_FILE_BY_NODE_ENV[bootstrapEnv] ?? `.env.${bootstrapEnv}`;
+}
+
+function loadEnvFiles(): void {
+   const envFile = getEnvFileForBootstrap();
+   if (envFile) {
+      dotenv.config({ path: path.resolve(process.cwd(), envFile) });
+   }
+}
+
+function requireEnv(key: string): string {
+   const value = process.env[key];
+   if (value === undefined) {
+      throw new Error(`Missing required environment variable: ${key}`);
+   }
+   return value;
+}
+
+function requireIntEnv(key: string): number {
+   const raw = requireEnv(key);
+   const parsed = parseInt(raw, 10);
+   if (Number.isNaN(parsed)) {
+      throw new Error(`Environment variable ${key} must be a valid integer`);
+   }
+   return parsed;
+}
+
+function requireCorsOrigins(): string[] {
+   const origins = requireEnv("CORS_ORIGINS")
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean);
+
+   if (origins.length === 0) {
+      throw new Error("CORS_ORIGINS must contain at least one origin");
+   }
+
+   return origins;
+}
+
+function assertNoLocalhost(envVar: string, value: string, nodeEnv: string): void {
+   if (LOCALHOST_PATTERN.test(value)) {
+      throw new Error(`${envVar} must not reference localhost in ${nodeEnv}`);
+   }
+}
+
+function validateNoLocalhostInStagingOrProduction(
+   nodeEnv: string,
+   values: {
+      DATABASE_URL: string;
+      REDIS_URL: string;
+      RABBITMQ_URL: string;
+      CORS_ORIGINS: string[];
+      EMAIL_SERVICE_URL: string;
+   }
+): void {
+   if (nodeEnv !== "staging" && nodeEnv !== "production") {
+      return;
+   }
+
+   assertNoLocalhost("DATABASE_URL", values.DATABASE_URL, nodeEnv);
+   assertNoLocalhost("REDIS_URL", values.REDIS_URL, nodeEnv);
+   assertNoLocalhost("RABBITMQ_URL", values.RABBITMQ_URL, nodeEnv);
+
+   for (const origin of values.CORS_ORIGINS) {
+      assertNoLocalhost("CORS_ORIGINS", origin, nodeEnv);
+   }
+
+   if (values.EMAIL_SERVICE_URL) {
+      assertNoLocalhost("EMAIL_SERVICE_URL", values.EMAIL_SERVICE_URL, nodeEnv);
+   }
+}
+
+loadEnvFiles();
+
+const nodeEnv = requireEnv("NODE_ENV");
+
+const DATABASE_URL = requireEnv("DATABASE_URL");
+const REDIS_URL = requireEnv("REDIS_URL");
+const RABBITMQ_URL = requireEnv("RABBITMQ_URL");
+const CORS_ORIGINS = requireCorsOrigins();
+const EMAIL_SERVICE_URL = requireEnv("EMAIL_SERVICE_URL");
+
+validateNoLocalhostInStagingOrProduction(nodeEnv, {
+   DATABASE_URL,
+   REDIS_URL,
+   RABBITMQ_URL,
+   CORS_ORIGINS,
+   EMAIL_SERVICE_URL,
+});
+
+const USE_SECURE_COOKIES = nodeEnv === "production" || nodeEnv === "staging";
 
 export const config = {
    NODE_ENV: nodeEnv,
-   PORT: parseInt(process.env['PORT'] || '8080', 10),
+   PORT: requireIntEnv("PORT"),
+   USE_SECURE_COOKIES,
 
-   // Database
-   DATABASE_URL: process.env['DATABASE_URL'] || '',
+   DATABASE_URL,
+   SUBSCRIPTION_CURRENCY: requireEnv("SUBSCRIPTION_CURRENCY"),
+   REDIS_URL,
+   RABBITMQ_URL,
+   RABBITMQ_EXCHANGE: requireEnv("RABBITMQ_EXCHANGE"),
 
-   // Redis
-   REDIS_URL: process.env['REDIS_URL'] || 'redis://localhost:6379',
+   JWT_PRIVATE_KEY: requireEnv("JWT_PRIVATE_KEY"),
+   JWT_PUBLIC_KEY: requireEnv("JWT_PUBLIC_KEY"),
+   JWT_KEY_ID: requireEnv("JWT_KEY_ID"),
+   JWT_ISSUER: requireEnv("JWT_ISSUER"),
+   JWT_ACCESS_TOKEN_EXPIRY: requireEnv("JWT_ACCESS_TOKEN_EXPIRY"),
+   JWT_REFRESH_TOKEN_EXPIRY: requireEnv("JWT_REFRESH_TOKEN_EXPIRY"),
 
-   // RabbitMQ
-   RABBITMQ_URL: process.env['RABBITMQ_URL'] || 'amqp://localhost:5672',
-   RABBITMQ_EXCHANGE: process.env['RABBITMQ_EXCHANGE'] || 'users',
+   CORS_ORIGINS,
+   RATE_LIMIT_WINDOW_MS: requireIntEnv("RATE_LIMIT_WINDOW_MS"),
+   RATE_LIMIT_MAX_REQUESTS: requireIntEnv("RATE_LIMIT_MAX_REQUESTS"),
 
-   // JWT Configuration
-   JWT_PRIVATE_KEY: process.env['JWT_PRIVATE_KEY'] || '',
-   JWT_PUBLIC_KEY: process.env['JWT_PUBLIC_KEY'] || '',
-   JWT_KEY_ID: process.env['JWT_KEY_ID'] || 'auth-service-key-1',
-   JWT_ISSUER: process.env['JWT_ISSUER'] || 'auth-service',
-   JWT_ACCESS_TOKEN_EXPIRY: '7d',
-   JWT_REFRESH_TOKEN_EXPIRY: '7d',
+   EMAIL_FROM: requireEnv("EMAIL_FROM"),
+   EMAIL_SERVICE_URL,
+   GOOGLE_CLIENT_ID: requireEnv("GOOGLE_CLIENT_ID"),
 
-   // CORS Configuration
-   CORS_ORIGINS: process.env['CORS_ORIGINS']?.split(',') || ['http://192.168.1.9:3000', 'http://localhost:8081', 'http://localhost:8082', 'http://localhost:3001'],
+   ARGON2_MEMORY: requireIntEnv("ARGON2_MEMORY"),
+   ARGON2_ITERATIONS: requireIntEnv("ARGON2_ITERATIONS"),
+   ARGON2_PARALLELISM: requireIntEnv("ARGON2_PARALLELISM"),
 
-   // Rate Limiting
-   RATE_LIMIT_WINDOW_MS: parseInt(process.env['RATE_LIMIT_WINDOW_MS'] || '900000', 10),
-   RATE_LIMIT_MAX_REQUESTS: parseInt(process.env['RATE_LIMIT_MAX_REQUESTS'] || '100', 10),
-
-   // Email Configuration
-   EMAIL_FROM: process.env['EMAIL_FROM'] || 'noreply@audiobook.com',
-   EMAIL_SERVICE_URL: process.env['EMAIL_SERVICE_URL'] || '',
-
-   // Google OAuth Configuration
-   GOOGLE_CLIENT_ID: process.env['GOOGLE_CLIENT_ID'] || '',
-
-   // Security Configuration
-   ARGON2_MEMORY: parseInt(process.env['ARGON2_MEMORY'] || '65536', 10),
-   ARGON2_ITERATIONS: parseInt(process.env['ARGON2_ITERATIONS'] || '3', 10),
-   ARGON2_PARALLELISM: parseInt(process.env['ARGON2_PARALLELISM'] || '4', 10),
-
-   // Logging
-   LOG_LEVEL: process.env['LOG_LEVEL'] || 'info',
+   LOG_LEVEL: requireEnv("LOG_LEVEL"),
 };
-
-// Validate required environment variables (skip in test environment)
-// In test environment, env vars are set in tests/setup.ts before this module loads
-const requiredEnvVars = ['DATABASE_URL', 'JWT_PRIVATE_KEY', 'JWT_PUBLIC_KEY', 'RABBITMQ_URL'];
-
-if (nodeEnv !== 'test') {
-   for (const envVar of requiredEnvVars) {
-      if (!process.env[envVar]) {
-         throw new Error(`Missing required environment variable: ${envVar}`);
-      }
-   }
-}

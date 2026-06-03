@@ -5,6 +5,7 @@ import { rabbitmqService } from './rabbitmq';
 import { googleOAuthService } from './google-oauth';
 import { otpService } from './otp';
 import { userDeviceService } from './userDevice';
+import { appLogger } from '../utils/logger';
 import {
    RegisterRequest,
    LoginRequest,
@@ -65,7 +66,7 @@ export class AuthService {
       try {
          await otpService.createOTP(user.id, OtpPurpose.REGISTRATION, user.email);
       } catch (error) {
-         console.error('Failed to create OTP:', error);
+         appLogger.error({ err: error }, 'Failed to create OTP');
          throw new Error('Failed to send OTP. Please try again.');
       }
 
@@ -158,7 +159,7 @@ export class AuthService {
       try {
          await rabbitmqService.publishUserCreated(updatedUser.id, firstName, lastName);
       } catch (error) {
-         console.error('Failed to publish user created event:', error);
+         appLogger.error({ err: error }, 'Failed to publish user created event');
          // Don't fail if RabbitMQ publishing fails, OTP is already verified
       }
 
@@ -317,7 +318,7 @@ export class AuthService {
       try {
          await otpService.createOTP(user.id, OtpPurpose.PASSWORD_RESET, user.email);
       } catch (error) {
-         console.error('Failed to create OTP:', error);
+         appLogger.error({ err: error }, 'Failed to create OTP');
          throw new Error(error instanceof Error ? error.message : 'Failed to send OTP. Please try again.');
       }
    }
@@ -388,7 +389,7 @@ export class AuthService {
       try {
          await otpService.createOTP(userId, OtpPurpose.PASSWORD_UPDATE, user.email);
       } catch (error) {
-         console.error('Failed to create OTP:', error);
+         appLogger.error({ err: error }, 'Failed to create OTP');
          throw new Error(error instanceof Error ? error.message : 'Failed to send OTP. Please try again.');
       }
    }
@@ -458,7 +459,7 @@ export class AuthService {
       try {
          await otpService.createOTP(userId, OtpPurpose.EMAIL_UPDATE, email.toLowerCase());
       } catch (error) {
-         console.error('Failed to create OTP:', error);
+         appLogger.error({ err: error }, 'Failed to create OTP');
          throw new Error(error instanceof Error ? error.message : 'Failed to send OTP. Please try again.');
       }
    }
@@ -592,7 +593,7 @@ export class AuthService {
          try {
             await rabbitmqService.publishUserCreated(user.id, firstName, lastName);
          } catch (error) {
-            console.error('Failed to publish user created event:', error);
+            appLogger.error({ err: error }, 'Failed to publish user created event');
             // Don't fail registration if RabbitMQ publishing fails
          }
       }

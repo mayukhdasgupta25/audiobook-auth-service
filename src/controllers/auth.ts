@@ -1,4 +1,6 @@
 import { Request, Response } from 'express';
+import { CookieOptions } from 'express-serve-static-core';
+import { config } from '../config/env';
 import { authService } from '../services/auth';
 import { redisService } from '../services/redis';
 import { otpService } from '../services/otp';
@@ -24,6 +26,18 @@ import {
 } from '../types';
 import { validateDeviceContext } from '../utils/deviceValidation';
 import { getDeviceRequestMeta, handleAuthControllerError } from '../utils/authController';
+
+const REFRESH_TOKEN_COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
+
+function getRefreshTokenCookieOptions(maxAge = REFRESH_TOKEN_COOKIE_MAX_AGE): CookieOptions {
+   return {
+      httpOnly: true,
+      secure: config.USE_SECURE_COOKIES,
+      sameSite: config.USE_SECURE_COOKIES ? 'strict' : 'lax',
+      path: '/',
+      maxAge,
+   };
+}
 
 /**
  * Authentication controller handling all auth-related endpoints
@@ -60,13 +74,7 @@ export class AuthController {
 
          // Set refresh token as httpOnly cookie for browser clients
          if (data.clientType === 'browser' && result.refreshToken) {
-            res.cookie('refreshToken', result.refreshToken, {
-               httpOnly: true,
-               secure: process.env['NODE_ENV'] === 'production',
-               sameSite: process.env['NODE_ENV'] === 'production' ? 'strict' : 'lax',
-               path: '/',
-               maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-            });
+            res.cookie('refreshToken', result.refreshToken, getRefreshTokenCookieOptions());
 
             // Remove refresh token from response body for browser clients
             delete result.refreshToken;
@@ -184,13 +192,7 @@ export class AuthController {
 
          // Set refresh token as httpOnly cookie for browser clients
          if (data.clientType === 'browser' && result.refreshToken) {
-            res.cookie('refreshToken', result.refreshToken, {
-               httpOnly: true,
-               secure: process.env['NODE_ENV'] === 'production',
-               sameSite: process.env['NODE_ENV'] === 'production' ? 'strict' : 'lax',
-               path: '/',
-               maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-            });
+            res.cookie('refreshToken', result.refreshToken, getRefreshTokenCookieOptions());
 
             // Remove refresh token from response body for browser clients
             delete result.refreshToken;
@@ -229,13 +231,7 @@ export class AuthController {
 
          // Update refresh token cookie for browser clients
          if (req.cookies['refreshToken'] && result.refreshToken) {
-            res.cookie('refreshToken', result.refreshToken, {
-               httpOnly: true,
-               secure: process.env['NODE_ENV'] === 'production',
-               sameSite: process.env['NODE_ENV'] === 'production' ? 'strict' : 'lax',
-               path: '/',
-               maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-            });
+            res.cookie('refreshToken', result.refreshToken, getRefreshTokenCookieOptions());
          }
 
          res.json({
@@ -268,8 +264,12 @@ export class AuthController {
             await authService.logout(refreshToken);
          }
 
-         // Clear refresh token cookie
-         res.clearCookie('refreshToken');
+         // Clear refresh token cookie (options must match set-cookie for secure cookies)
+         res.clearCookie('refreshToken', {
+            path: '/',
+            secure: config.USE_SECURE_COOKIES,
+            sameSite: config.USE_SECURE_COOKIES ? 'strict' : 'lax',
+         });
 
          res.json({ message: 'Logout successful' });
       } catch (error) {

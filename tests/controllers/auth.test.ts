@@ -289,13 +289,19 @@ describe('AuthController', () => {
    });
 
    describe('logout', () => {
+      const clearRefreshTokenCookieOptions = {
+         path: '/',
+         secure: false,
+         sameSite: 'lax' as const,
+      };
+
       test('should logout and clear cookie', async () => {
          mockRequest.cookies = { refreshToken: 'refresh-token' };
 
          await authController.logout(mockRequest as Request, mockResponse as Response);
 
          expect(authService.logout).toHaveBeenCalledWith('refresh-token');
-         expect(mockClearCookie).toHaveBeenCalledWith('refreshToken');
+         expect(mockClearCookie).toHaveBeenCalledWith('refreshToken', clearRefreshTokenCookieOptions);
          expect(mockJson).toHaveBeenCalledWith({ message: 'Logout successful' });
       });
 
@@ -305,13 +311,13 @@ describe('AuthController', () => {
          await authController.logout(mockRequest as Request, mockResponse as Response);
 
          expect(authService.logout).toHaveBeenCalledWith('mobile-token');
-         expect(mockClearCookie).toHaveBeenCalledWith('refreshToken');
+         expect(mockClearCookie).toHaveBeenCalledWith('refreshToken', clearRefreshTokenCookieOptions);
       });
 
       test('should handle logout without token gracefully', async () => {
          await authController.logout(mockRequest as Request, mockResponse as Response);
 
-         expect(mockClearCookie).toHaveBeenCalledWith('refreshToken');
+         expect(mockClearCookie).toHaveBeenCalledWith('refreshToken', clearRefreshTokenCookieOptions);
          expect(mockJson).toHaveBeenCalledWith({ message: 'Logout successful' });
       });
    });

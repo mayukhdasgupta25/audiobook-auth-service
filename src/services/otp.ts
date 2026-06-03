@@ -1,6 +1,7 @@
 import { PrismaClient, OtpPurpose } from '@prisma/client';
 import type { OtpToken } from '@prisma/client';
 import { PasswordUtils } from '../utils/crypto';
+import { emailLogger } from '../utils/logger';
 import { emailService } from './email';
 
 // Prisma 7 reads connection from prisma.config.ts automatically
@@ -68,7 +69,7 @@ export class OTPService {
       const otpCode = this.generateOTP();
 
       if (purpose === OtpPurpose.DEVICE_REMOVAL) {
-         console.log(`[DEVICE_REMOVAL OTP] email=${userEmail} otp=${otpCode}`);
+         emailLogger.info({ email: userEmail, purpose }, 'Device removal OTP created');
       }
 
       // Hash OTP using Argon2 (same as passwords for security)
@@ -92,9 +93,9 @@ export class OTPService {
       // Send OTP email (don't fail if email fails)
       try {
          await emailService.sendOTPEmail(userEmail, otpCode, purpose, userId);
-         console.log(otpCode);
+         emailLogger.debug({ userId, purpose }, 'OTP email sent');
       } catch (error) {
-         console.error('Failed to send OTP email, but OTP was created:', error);
+         emailLogger.error({ err: error, userId, userEmail, purpose }, 'Failed to send OTP email, but OTP was created');
          // OTP is still created and stored, user can request resend if needed
       }
 

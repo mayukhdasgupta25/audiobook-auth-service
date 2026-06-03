@@ -51,7 +51,7 @@ After migrations, seed Base, Standard, and Premium plans:
 npm run db:seed
 ```
 
-Skips if any plans already exist. Optional `SUBSCRIPTION_CURRENCY` (default `INR`).
+Skips if any plans already exist. Requires `SUBSCRIPTION_CURRENCY` in the environment file (see `src/config/env.ts`).
 
 Plan API responses include `features` (raw JSON) and `featureDescriptions` (sentences from `config/subscription-plan-features.en.yml`).
 
