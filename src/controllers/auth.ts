@@ -26,6 +26,7 @@ import {
 } from '../types';
 import { validateDeviceContext } from '../utils/deviceValidation';
 import { getDeviceRequestMeta, handleAuthControllerError } from '../utils/authController';
+import { generateCsrfToken, getCsrfCookieOptions } from '../utils/csrf';
 
 const REFRESH_TOKEN_COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
 
@@ -43,6 +44,15 @@ function getRefreshTokenCookieOptions(maxAge = REFRESH_TOKEN_COOKIE_MAX_AGE): Co
  * Authentication controller handling all auth-related endpoints
  */
 export class AuthController {
+   /**
+    * Issue a CSRF token for browser clients (double-submit cookie pattern)
+    */
+   async getCsrfToken(_req: Request, res: Response): Promise<void> {
+      const token = generateCsrfToken();
+      res.cookie('csrfToken', token, getCsrfCookieOptions());
+      res.json({ csrfToken: token });
+   }
+
    /**
     * Register a new user
     */

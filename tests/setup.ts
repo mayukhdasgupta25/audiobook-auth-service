@@ -27,7 +27,6 @@ process.env['JWT_KEY_ID'] = 'test-key-1';
 process.env['JWT_ISSUER'] = 'test-auth-service';
 process.env['JWT_ACCESS_TOKEN_EXPIRY'] = '7d';
 process.env['JWT_REFRESH_TOKEN_EXPIRY'] = '7d';
-process.env['CORS_ORIGINS'] = 'http://localhost:3000';
 process.env['RATE_LIMIT_WINDOW_MS'] = '900000';
 process.env['RATE_LIMIT_MAX_REQUESTS'] = '100';
 process.env['EMAIL_FROM'] = 'test@example.com';

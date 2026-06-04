@@ -66,6 +66,30 @@ describe('AuthController', () => {
       };
    });
 
+   describe('getCsrfToken', () => {
+      test('should set csrfToken cookie and return token in body', async () => {
+         await authController.getCsrfToken(mockRequest as Request, mockResponse as Response);
+
+         expect(mockCookie).toHaveBeenCalledWith(
+            'csrfToken',
+            expect.stringMatching(/^[a-f0-9]{64}$/),
+            {
+               httpOnly: true,
+               secure: false,
+               sameSite: 'lax',
+               path: '/',
+               maxAge: 24 * 60 * 60 * 1000,
+            },
+         );
+         expect(mockJson).toHaveBeenCalledWith({
+            csrfToken: expect.stringMatching(/^[a-f0-9]{64}$/),
+         });
+         const cookieToken = mockCookie.mock.calls[0][1];
+         const jsonToken = mockJson.mock.calls[0][0].csrfToken;
+         expect(cookieToken).toBe(jsonToken);
+      });
+   });
+
    describe('register', () => {
       test('should register successfully and return 201', async () => {
          const mockUser = { id: 'user-123', email: 'test@example.com' };
