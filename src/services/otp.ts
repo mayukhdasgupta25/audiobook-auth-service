@@ -1,6 +1,7 @@
 import { PrismaClient, OtpPurpose } from '@prisma/client';
 import type { OtpToken } from '@prisma/client';
 import { PasswordUtils } from '../utils/crypto';
+import { emailLogger } from '../utils/logger';
 import { emailService } from './email';
 
 // Prisma 7 reads connection from prisma.config.ts automatically
@@ -67,6 +68,10 @@ export class OTPService {
       // Generate OTP
       const otpCode = this.generateOTP();
 
+      if (purpose === OtpPurpose.DEVICE_REMOVAL) {
+         emailLogger.info({ email: userEmail, purpose }, 'Device removal OTP created');
+      }
+
       // Hash OTP using Argon2 (same as passwords for security)
       const otpHash = await PasswordUtils.hashPassword(otpCode);
 
@@ -88,9 +93,9 @@ export class OTPService {
       // Send OTP email (don't fail if email fails)
       try {
          await emailService.sendOTPEmail(userEmail, otpCode, purpose, userId);
-         console.log(otpCode);
+         emailLogger.debug({ userId, purpose }, 'OTP email sent');
       } catch (error) {
-         console.error('Failed to send OTP email, but OTP was created:', error);
+         emailLogger.error({ err: error, userId, userEmail, purpose }, 'Failed to send OTP email, but OTP was created');
          // OTP is still created and stored, user can request resend if needed
       }
 
@@ -199,6 +204,39 @@ export class OTPService {
       const cooldownMs = this.RESEND_COOLDOWN_SECONDS * 1000;
 
       return timeSinceCreation >= cooldownMs;
+   }
+
+   /**
+    * Resend cooldown state for an active (unexpired, unverified) OTP.
+    * remainingSeconds is 0 when resend is allowed; >0 when still in cooldown.
+    */
+   async getResendCooldownState(
+      userId: string,
+      purpose: OtpPurpose,
+   ): Promise<{ hasActiveOtp: boolean; remainingSeconds: number }> {
+      const existingOTP = await prisma.otpToken.findFirst({
+         where: {
+            userId,
+            purpose,
+            isVerified: false,
+            invalidatedAt: null,
+            expiresAt: { gt: new Date() },
+         },
+         orderBy: { createdAt: 'desc' },
+      });
+
+      if (!existingOTP) {
+         return { hasActiveOtp: false, remainingSeconds: 0 };
+      }
+
+      const elapsedMs = Date.now() - existingOTP.createdAt.getTime();
+      const cooldownMs = this.RESEND_COOLDOWN_SECONDS * 1000;
+      const remainingMs = Math.max(0, cooldownMs - elapsedMs);
+
+      return {
+         hasActiveOtp: true,
+         remainingSeconds: Math.ceil(remainingMs / 1000),
+      };
    }
 
    /**

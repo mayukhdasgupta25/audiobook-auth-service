@@ -1,6 +1,7 @@
 import { createClient, RedisClientType } from 'redis';
 import { config } from '../config/env';
 import { RevokedToken, JWKS } from '../types';
+import { redisLogger } from '../utils/logger';
 
 /**
  * Redis service for token revocation and blocklist management
@@ -15,17 +16,17 @@ export class RedisService {
       });
 
       this.client.on('error', (err) => {
-         console.error('Redis Client Error:', err);
+         redisLogger.error({ err }, 'Redis client error');
          this.isConnected = false;
       });
 
       this.client.on('connect', () => {
-         console.log('Redis Client Connected');
+         redisLogger.info('Redis client connected');
          this.isConnected = true;
       });
 
       this.client.on('disconnect', () => {
-         console.log('Redis Client Disconnected');
+         redisLogger.info('Redis client disconnected');
          this.isConnected = false;
       });
    }
@@ -43,8 +44,12 @@ export class RedisService {
     * Disconnect from Redis
     */
    async disconnect(): Promise<void> {
-      if (this.isConnected) {
-         await this.client.disconnect();
+      try {
+         if (this.client.isOpen) {
+            await this.client.disconnect();
+         }
+      } finally {
+         this.isConnected = false;
       }
    }
 
@@ -67,9 +72,9 @@ export class RedisService {
             JSON.stringify(revokedToken)
          );
 
-         console.log(`Token ${jti} revoked for user ${userId}`);
+         redisLogger.info({ jti, userId }, 'Token revoked');
       } catch (error) {
-         console.error('Failed to revoke token:', error);
+         redisLogger.error({ err: error, jti, userId }, 'Failed to revoke token');
          throw new Error('Failed to revoke token');
       }
    }
@@ -82,7 +87,7 @@ export class RedisService {
          const result = await this.client.get(`revoked:${jti}`);
          return result !== null;
       } catch (error) {
-         console.error('Failed to check token revocation:', error);
+         redisLogger.error({ err: error, jti }, 'Failed to check token revocation');
          // In case of Redis error, assume token is not revoked to avoid blocking valid users
          return false;
       }
@@ -99,7 +104,7 @@ export class RedisService {
          }
          return JSON.parse(result) as RevokedToken;
       } catch (error) {
-         console.error('Failed to get revoked token:', error);
+         redisLogger.error({ err: error, jti }, 'Failed to get revoked token');
          return null;
       }
    }
@@ -112,7 +117,7 @@ export class RedisService {
          // This would require scanning all keys, which is expensive
          // In production, you might want to maintain a separate index
          // For now, we'll log this action and let tokens expire naturally
-         console.log(`Emergency revoke requested for user ${userId}: ${reason}`);
+         redisLogger.info({ userId, reason }, 'Emergency revoke requested');
 
          // Store a marker for this user's emergency revoke
          await this.client.setEx(
@@ -125,7 +130,7 @@ export class RedisService {
             })
          );
       } catch (error) {
-         console.error('Failed to emergency revoke user tokens:', error);
+         redisLogger.error({ err: error, userId }, 'Failed to emergency revoke user tokens');
          throw new Error('Failed to emergency revoke user tokens');
       }
    }
@@ -138,7 +143,7 @@ export class RedisService {
          const result = await this.client.get(`emergency_revoke:${userId}`);
          return result !== null;
       } catch (error) {
-         console.error('Failed to check emergency revoke:', error);
+         redisLogger.error({ err: error, userId }, 'Failed to check emergency revoke');
          return false;
       }
    }
@@ -154,7 +159,7 @@ export class RedisService {
             JSON.stringify(data)
          );
       } catch (error) {
-         console.error('Failed to store PKCE session:', error);
+         redisLogger.error({ err: error, sessionId }, 'Failed to store PKCE session');
          throw new Error('Failed to store PKCE session');
       }
    }
@@ -170,7 +175,7 @@ export class RedisService {
          }
          return JSON.parse(result);
       } catch (error) {
-         console.error('Failed to get PKCE session:', error);
+         redisLogger.error({ err: error, sessionId }, 'Failed to get PKCE session');
          return null;
       }
    }
@@ -182,7 +187,7 @@ export class RedisService {
       try {
          await this.client.del(`pkce:${sessionId}`);
       } catch (error) {
-         console.error('Failed to delete PKCE session:', error);
+         redisLogger.error({ err: error, sessionId }, 'Failed to delete PKCE session');
       }
    }
 
@@ -193,7 +198,7 @@ export class RedisService {
       try {
          await this.client.setEx('jwks:current', ttl, JSON.stringify(jwks));
       } catch (error) {
-         console.error('Failed to cache JWKS:', error);
+         redisLogger.error({ err: error }, 'Failed to cache JWKS');
          throw new Error('Failed to cache JWKS');
       }
    }
@@ -209,7 +214,7 @@ export class RedisService {
          }
          return JSON.parse(result) as JWKS;
       } catch (error) {
-         console.error('Failed to get cached JWKS:', error);
+         redisLogger.error({ err: error }, 'Failed to get cached JWKS');
          return null;
       }
    }
@@ -220,9 +225,9 @@ export class RedisService {
    async invalidateJWKSCache(): Promise<void> {
       try {
          await this.client.del('jwks:current');
-         console.log('JWKS cache invalidated');
+         redisLogger.info('JWKS cache invalidated');
       } catch (error) {
-         console.error('Failed to invalidate JWKS cache:', error);
+         redisLogger.error({ err: error }, 'Failed to invalidate JWKS cache');
       }
    }
 
@@ -233,9 +238,9 @@ export class RedisService {
       try {
          // Store without TTL (persistent until key rotation)
          await this.client.set('jwks:key_hash', keyHash);
-         console.log('Key hash stored successfully');
+         redisLogger.info('Key hash stored successfully');
       } catch (error) {
-         console.error('Failed to store key hash:', error);
+         redisLogger.error({ err: error }, 'Failed to store key hash');
       }
    }
 
@@ -247,7 +252,7 @@ export class RedisService {
          const result = await this.client.get('jwks:key_hash');
          return result;
       } catch (error) {
-         console.error('Failed to get key hash:', error);
+         redisLogger.error({ err: error }, 'Failed to get key hash');
          return null;
       }
    }

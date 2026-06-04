@@ -62,7 +62,32 @@ describe('AuthController', () => {
       mockRequest = {
          body: {},
          cookies: {},
+         headers: {},
       };
+   });
+
+   describe('getCsrfToken', () => {
+      test('should set csrfToken cookie and return token in body', async () => {
+         await authController.getCsrfToken(mockRequest as Request, mockResponse as Response);
+
+         expect(mockCookie).toHaveBeenCalledWith(
+            'csrfToken',
+            expect.stringMatching(/^[a-f0-9]{64}$/),
+            {
+               httpOnly: true,
+               secure: false,
+               sameSite: 'lax',
+               path: '/',
+               maxAge: 24 * 60 * 60 * 1000,
+            },
+         );
+         expect(mockJson).toHaveBeenCalledWith({
+            csrfToken: expect.stringMatching(/^[a-f0-9]{64}$/),
+         });
+         const cookieToken = mockCookie.mock.calls[0][1];
+         const jsonToken = mockJson.mock.calls[0][0].csrfToken;
+         expect(cookieToken).toBe(jsonToken);
+      });
    });
 
    describe('register', () => {
@@ -131,15 +156,19 @@ describe('AuthController', () => {
             email: 'test@example.com',
             password: 'password123',
             clientType: 'browser',
+            device: { deviceId: 'device-uuid-1' },
          };
 
          await authController.login(mockRequest as Request, mockResponse as Response);
 
-         expect(authService.login).toHaveBeenCalledWith({
-            email: 'test@example.com',
-            password: 'password123',
-            clientType: 'browser',
-         });
+         expect(authService.login).toHaveBeenCalledWith(
+            expect.objectContaining({
+               email: 'test@example.com',
+               password: 'password123',
+               clientType: 'browser',
+               device: { deviceId: 'device-uuid-1' },
+            }),
+         );
          expect(mockCookie).toHaveBeenCalledWith('refreshToken', 'refresh-token', {
             httpOnly: true,
             secure: false,
@@ -166,6 +195,7 @@ describe('AuthController', () => {
             email: 'test@example.com',
             password: 'password123',
             clientType: 'mobile',
+            device: { deviceId: 'device-uuid-1' },
          };
 
          await authController.login(mockRequest as Request, mockResponse as Response);
@@ -182,7 +212,11 @@ describe('AuthController', () => {
             new Error('Invalid email or password')
          );
 
-         mockRequest.body = { email: 'test@example.com', password: 'wrong' };
+         mockRequest.body = {
+            email: 'test@example.com',
+            password: 'wrong',
+            device: { deviceId: 'device-uuid-1' },
+         };
 
          await authController.login(mockRequest as Request, mockResponse as Response);
 
@@ -190,6 +224,18 @@ describe('AuthController', () => {
          expect(mockJson).toHaveBeenCalledWith({
             error: 'Invalid email or password',
          });
+      });
+
+      test('should return 400 when deviceId is missing', async () => {
+         mockRequest.body = { email: 'test@example.com', password: 'password123' };
+
+         await authController.login(mockRequest as Request, mockResponse as Response);
+
+         expect(mockStatus).toHaveBeenCalledWith(400);
+         expect(mockJson).toHaveBeenCalledWith(
+            expect.objectContaining({ code: 'DEVICE_ID_REQUIRED' }),
+         );
+         expect(authService.login).not.toHaveBeenCalled();
       });
    });
 
@@ -267,13 +313,19 @@ describe('AuthController', () => {
    });
 
    describe('logout', () => {
+      const clearRefreshTokenCookieOptions = {
+         path: '/',
+         secure: false,
+         sameSite: 'lax' as const,
+      };
+
       test('should logout and clear cookie', async () => {
          mockRequest.cookies = { refreshToken: 'refresh-token' };
 
          await authController.logout(mockRequest as Request, mockResponse as Response);
 
          expect(authService.logout).toHaveBeenCalledWith('refresh-token');
-         expect(mockClearCookie).toHaveBeenCalledWith('refreshToken');
+         expect(mockClearCookie).toHaveBeenCalledWith('refreshToken', clearRefreshTokenCookieOptions);
          expect(mockJson).toHaveBeenCalledWith({ message: 'Logout successful' });
       });
 
@@ -283,13 +335,13 @@ describe('AuthController', () => {
          await authController.logout(mockRequest as Request, mockResponse as Response);
 
          expect(authService.logout).toHaveBeenCalledWith('mobile-token');
-         expect(mockClearCookie).toHaveBeenCalledWith('refreshToken');
+         expect(mockClearCookie).toHaveBeenCalledWith('refreshToken', clearRefreshTokenCookieOptions);
       });
 
       test('should handle logout without token gracefully', async () => {
          await authController.logout(mockRequest as Request, mockResponse as Response);
 
-         expect(mockClearCookie).toHaveBeenCalledWith('refreshToken');
+         expect(mockClearCookie).toHaveBeenCalledWith('refreshToken', clearRefreshTokenCookieOptions);
          expect(mockJson).toHaveBeenCalledWith({ message: 'Logout successful' });
       });
    });

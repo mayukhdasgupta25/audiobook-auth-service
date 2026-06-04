@@ -21,6 +21,7 @@ enum OtpPurpose {
    EMAIL_UPDATE
    PASSWORD_UPDATE
    PASSWORD_RESET
+   DEVICE_REMOVAL
 }
 
 enum EmailType {
@@ -47,24 +48,180 @@ model User {
    passwordResetTokens     PasswordResetToken[]
    otpTokens               OtpToken[]
    emailLogs               EmailLog[]
+   subscriptions           UserSubscription[]
+   devices                   UserDevice[]
+   deviceChanges             UserDeviceChange[]
 
    @@map("users")
 }
 
-model RefreshToken {
+enum UserDeviceChangeType {
+   ADDED
+   REMOVED
+}
+
+model UserDevice {
    id         String   @id @default(uuid())
-   token      String   @unique
    userId     String
-   expiresAt  DateTime
-   createdAt  DateTime @default(now())
-   isRevoked  Boolean  @default(false)
-   replacedBy String? // ID of the token that replaced this one
+   deviceId   String
+   deviceName String?
+   platform   String?
    userAgent  String?
    ipAddress  String?
+   lastSeenAt DateTime @default(now())
+   createdAt  DateTime @default(now())
+
+   user          User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+   refreshTokens RefreshToken[]
+   deviceChanges UserDeviceChange[]
+
+   @@unique([userId, deviceId])
+   @@index([userId])
+   @@map("user_devices")
+}
+
+model UserDeviceChange {
+   id           String               @id @default(uuid())
+   userId       String
+   type         UserDeviceChangeType
+   userDeviceId String?
+   createdAt    DateTime             @default(now())
+
+   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+   userDevice UserDevice? @relation(fields: [userDeviceId], references: [id], onDelete: SetNull)
+
+   @@index([userId, createdAt])
+   @@map("user_device_changes")
+}
+
+enum BillingInterval {
+   MONTHLY
+   QUARTERLY
+   YEARLY
+   LIFETIME
+}
+
+enum SubscriptionStatus {
+   PENDING
+   TRIALING
+   ACTIVE
+   PAST_DUE
+   PAUSED
+   CANCELED
+   EXPIRED
+}
+
+enum PlanChangeType {
+   UPGRADE
+   DOWNGRADE
+}
+
+enum BillingEventType {
+   PRORATION_CHARGE
+   RENEWAL_CHARGE
+   RENEWAL_FAILED
+   RENEWAL_RETRY_FAILED
+   PLAN_CHANGE_SCHEDULED
+}
+
+model SubscriptionPlan {
+   id          String  @id @default(cuid())
+   name        String  @unique
+   description String?
+
+   price    Decimal @db.Decimal(10, 2)
+   currency String  @default("USD")
+
+   tierLevel Int @default(0)
+
+   billingInterval BillingInterval @default(MONTHLY)
+   trialDays       Int             @default(0)
+
+   features Json?
+
+   isActive Boolean @default(true)
+
+   createdAt DateTime @default(now())
+   updatedAt DateTime @updatedAt
+
+   subscriptions        UserSubscription[] @relation("CurrentPlan")
+   pendingSubscriptions UserSubscription[] @relation("PendingPlan")
+
+   @@map("subscription_plans")
+}
+
+model UserSubscription {
+   id     String @id @default(cuid())
+   userId String
+   planId String
+
+   status             SubscriptionStatus @default(PENDING)
+   startDate          DateTime           @default(now())
+   endDate            DateTime?
+   currentPeriodStart DateTime           @default(now())
+   currentPeriodEnd   DateTime
+   trialEndsAt        DateTime?
+
+   cancelAtPeriodEnd Boolean   @default(false)
+   canceledAt        DateTime?
+
+   autoRenew     Boolean @default(true)
+   paymentMethod String?
+
+   pendingPlanId         String?
+   pendingPlanChangeAt   DateTime?
+   pendingPlanChangeType PlanChangeType?
+
+   pastDueRetryCount Int @default(0)
+
+   createdAt DateTime @default(now())
+   updatedAt DateTime @updatedAt
+
+   user          User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
+   plan          SubscriptionPlan           @relation("CurrentPlan", fields: [planId], references: [id])
+   pendingPlan   SubscriptionPlan?          @relation("PendingPlan", fields: [pendingPlanId], references: [id])
+   billingEvents SubscriptionBillingEvent[]
+
+   @@index([userId])
+   @@index([planId])
+   @@index([status])
+   @@index([pendingPlanId])
+   @@map("user_subscriptions")
+}
+
+model SubscriptionBillingEvent {
+   id                 String           @id @default(cuid())
+   userSubscriptionId String
+   type               BillingEventType
+   amount             Decimal          @db.Decimal(10, 2)
+   currency           String
+   metadata           Json?
+   createdAt          DateTime         @default(now())
+
+   userSubscription UserSubscription @relation(fields: [userSubscriptionId], references: [id], onDelete: Cascade)
+
+   @@index([userSubscriptionId])
+   @@index([type])
+   @@map("subscription_billing_events")
+}
+
+model RefreshToken {
+   id           String   @id @default(uuid())
+   token        String   @unique
+   userId       String
+   userDeviceId String?
+   expiresAt    DateTime
+   createdAt    DateTime @default(now())
+   isRevoked    Boolean  @default(false)
+   replacedBy   String? // ID of the token that replaced this one
+   userAgent    String?
+   ipAddress    String?
 
    // Relations
-   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+   userDevice UserDevice? @relation(fields: [userDeviceId], references: [id], onDelete: SetNull)
 
+   @@index([userDeviceId])
    @@map("refresh_tokens")
 }
 

@@ -1,4 +1,6 @@
 import { Request, Response } from 'express';
+import { CookieOptions } from 'express-serve-static-core';
+import { config } from '../config/env';
 import { authService } from '../services/auth';
 import { redisService } from '../services/redis';
 import { otpService } from '../services/otp';
@@ -20,13 +22,37 @@ import {
    ChangePasswordRequest,
    VerifyEmailUpdateOTPRequest,
    UpdateEmailRequest,
-   VerifyForgotPasswordOTPRequest
+   VerifyForgotPasswordOTPRequest,
 } from '../types';
+import { validateDeviceContext } from '../utils/deviceValidation';
+import { getDeviceRequestMeta, handleAuthControllerError } from '../utils/authController';
+import { generateCsrfToken, getCsrfCookieOptions } from '../utils/csrf';
+
+const REFRESH_TOKEN_COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
+
+function getRefreshTokenCookieOptions(maxAge = REFRESH_TOKEN_COOKIE_MAX_AGE): CookieOptions {
+   return {
+      httpOnly: true,
+      secure: config.USE_SECURE_COOKIES,
+      sameSite: config.USE_SECURE_COOKIES ? 'strict' : 'lax',
+      path: '/',
+      maxAge,
+   };
+}
 
 /**
  * Authentication controller handling all auth-related endpoints
  */
 export class AuthController {
+   /**
+    * Issue a CSRF token for browser clients (double-submit cookie pattern)
+    */
+   async getCsrfToken(_req: Request, res: Response): Promise<void> {
+      const token = generateCsrfToken();
+      res.cookie('csrfToken', token, getCsrfCookieOptions());
+      res.json({ csrfToken: token });
+   }
+
    /**
     * Register a new user
     */
@@ -52,18 +78,13 @@ export class AuthController {
     */
    async login(req: Request, res: Response): Promise<void> {
       try {
-         const data: LoginRequest = req.body;
-         const result = await authService.login(data);
+         const device = validateDeviceContext(req.body.device);
+         const data: LoginRequest = { ...req.body, device };
+         const result = await authService.login({ ...data, meta: getDeviceRequestMeta(req) });
 
          // Set refresh token as httpOnly cookie for browser clients
          if (data.clientType === 'browser' && result.refreshToken) {
-            res.cookie('refreshToken', result.refreshToken, {
-               httpOnly: true,
-               secure: process.env['NODE_ENV'] === 'production',
-               sameSite: process.env['NODE_ENV'] === 'production' ? 'strict' : 'lax',
-               path: '/',
-               maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-            });
+            res.cookie('refreshToken', result.refreshToken, getRefreshTokenCookieOptions());
 
             // Remove refresh token from response body for browser clients
             delete result.refreshToken;
@@ -74,9 +95,7 @@ export class AuthController {
             ...result,
          });
       } catch (error) {
-         res.status(401).json({
-            error: error instanceof Error ? error.message : 'Login failed',
-         });
+         handleAuthControllerError(res, error, 'Login failed');
       }
    }
 
@@ -85,9 +104,12 @@ export class AuthController {
     */
    async verifyRegistrationOTP(req: Request, res: Response): Promise<void> {
       try {
-         const data: VerifyOTPRequest = req.body;
-         console.log(data);
-         const result = await authService.verifyRegistrationOTP(data);
+         const device = validateDeviceContext(req.body.device);
+         const data: VerifyOTPRequest = { ...req.body, device };
+         const result = await authService.verifyRegistrationOTP({
+            ...data,
+            meta: getDeviceRequestMeta(req),
+         });
 
          res.json({
             message: 'Registration OTP verified successfully. User profile created.',
@@ -96,9 +118,7 @@ export class AuthController {
             user: result.user,
          });
       } catch (error) {
-         res.status(400).json({
-            error: error instanceof Error ? error.message : 'OTP verification failed',
-         });
+         handleAuthControllerError(res, error, 'OTP verification failed');
       }
    }
 
@@ -122,11 +142,11 @@ export class AuthController {
             return;
          }
 
-         // Purpose must be specified (REGISTRATION, EMAIL_UPDATE, or PASSWORD_UPDATE)
+         // Purpose must be specified (REGISTRATION, EMAIL_UPDATE, PASSWORD_UPDATE, or DEVICE_REMOVAL)
          const purpose = (req.body as any).purpose;
          if (!purpose || purpose === OtpPurpose.LOGIN) {
             res.status(400).json({
-               error: 'Purpose is required and must be REGISTRATION, EMAIL_UPDATE, or PASSWORD_UPDATE',
+               error: 'Purpose is required and must be REGISTRATION, EMAIL_UPDATE, PASSWORD_UPDATE, or DEVICE_REMOVAL',
             });
             return;
          }
@@ -158,17 +178,16 @@ export class AuthController {
     */
    async mobileLogin(req: Request, res: Response): Promise<void> {
       try {
-         const data: MobileLoginRequest = req.body;
-         const result = await authService.mobileLogin(data);
+         const device = validateDeviceContext(req.body.device);
+         const data: MobileLoginRequest = { ...req.body, device };
+         const result = await authService.mobileLogin({ ...data, meta: getDeviceRequestMeta(req) });
 
          res.json({
             message: 'Mobile login successful',
             ...result,
          });
       } catch (error) {
-         res.status(401).json({
-            error: error instanceof Error ? error.message : 'Mobile login failed',
-         });
+         handleAuthControllerError(res, error, 'Mobile login failed');
       }
    }
 
@@ -177,18 +196,13 @@ export class AuthController {
     */
    async googleOAuth(req: Request, res: Response): Promise<void> {
       try {
-         const data: GoogleOAuthRequest = req.body;
-         const result = await authService.googleOAuth(data);
+         const device = validateDeviceContext(req.body.device);
+         const data: GoogleOAuthRequest = { ...req.body, device };
+         const result = await authService.googleOAuth({ ...data, meta: getDeviceRequestMeta(req) });
 
          // Set refresh token as httpOnly cookie for browser clients
          if (data.clientType === 'browser' && result.refreshToken) {
-            res.cookie('refreshToken', result.refreshToken, {
-               httpOnly: true,
-               secure: process.env['NODE_ENV'] === 'production',
-               sameSite: process.env['NODE_ENV'] === 'production' ? 'strict' : 'lax',
-               path: '/',
-               maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-            });
+            res.cookie('refreshToken', result.refreshToken, getRefreshTokenCookieOptions());
 
             // Remove refresh token from response body for browser clients
             delete result.refreshToken;
@@ -199,9 +213,7 @@ export class AuthController {
             ...result,
          });
       } catch (error) {
-         res.status(401).json({
-            error: error instanceof Error ? error.message : 'Google OAuth authentication failed',
-         });
+         handleAuthControllerError(res, error, 'Google OAuth authentication failed');
       }
    }
 
@@ -229,13 +241,7 @@ export class AuthController {
 
          // Update refresh token cookie for browser clients
          if (req.cookies['refreshToken'] && result.refreshToken) {
-            res.cookie('refreshToken', result.refreshToken, {
-               httpOnly: true,
-               secure: process.env['NODE_ENV'] === 'production',
-               sameSite: process.env['NODE_ENV'] === 'production' ? 'strict' : 'lax',
-               path: '/',
-               maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-            });
+            res.cookie('refreshToken', result.refreshToken, getRefreshTokenCookieOptions());
          }
 
          res.json({
@@ -245,9 +251,7 @@ export class AuthController {
             user: result.user,
          });
       } catch (error) {
-         res.status(401).json({
-            error: error instanceof Error ? error.message : 'Token refresh failed',
-         });
+         handleAuthControllerError(res, error, 'Token refresh failed');
       }
    }
 
@@ -270,8 +274,12 @@ export class AuthController {
             await authService.logout(refreshToken);
          }
 
-         // Clear refresh token cookie
-         res.clearCookie('refreshToken');
+         // Clear refresh token cookie (options must match set-cookie for secure cookies)
+         res.clearCookie('refreshToken', {
+            path: '/',
+            secure: config.USE_SECURE_COOKIES,
+            sameSite: config.USE_SECURE_COOKIES ? 'strict' : 'lax',
+         });
 
          res.json({ message: 'Logout successful' });
       } catch (error) {

@@ -15,6 +15,7 @@ A secure authentication service built with Node.js, Express, TypeScript, and Pri
 - **Rate Limiting**: Protection against brute force attacks
 - **Security Headers**: Helmet.js and custom security middleware
 - **TypeScript**: Full type safety throughout the application
+- **Subscriptions**: Plan catalog and per-user subscriptions; see [docs/SUBSCRIPTIONS.md](./docs/SUBSCRIPTIONS.md)
 
 ## Architecture
 
@@ -61,21 +62,21 @@ npm install
 3. Set up environment variables:
 
 ```bash
-# For development (default)
-cp env.example .env
-# Edit .env with your configuration
+# For development
+cp .env.example .env.development
+# Edit .env.development with your configuration
 
-# For staging (optional)
-cp env.staging .env.staging
-# Edit .env.staging with your configuration
+# For test server (deployed testing environment; localhost allowed)
+cp .env.testing.example .env.testing
+# Edit .env.testing with your configuration
 
-# For production (optional)
-cp env.production .env.production
-# Edit .env.production with your configuration
+# For staging
+cp .env.staging.example .env.staging
+# Edit .env.staging with your configuration (no localhost URLs)
 
-# For local overrides (optional)
-cp env.example .env.local
-# Edit .env.local with your local overrides
+# For production
+cp .env.production.example .env.production
+# Edit .env.production with your configuration (no localhost URLs)
 ```
 
 4. Set up the database:
@@ -117,19 +118,32 @@ npm run db:seed
 
 ## Environment Variables
 
-| Variable            | Description                            | Required | Default               |
-| ------------------- | -------------------------------------- | -------- | --------------------- |
-| `DATABASE_URL`      | PostgreSQL connection string           | Yes      | -                     |
-| `REDIS_URL`         | Redis connection string                | Yes      | -                     |
-| `RABBITMQ_URL`      | RabbitMQ connection string             | Yes      | -                     |
-| `RABBITMQ_EXCHANGE` | RabbitMQ exchange name                 | No       | users                 |
-| `JWT_PRIVATE_KEY`   | RSA private key for JWT signing        | Yes      | -                     |
-| `JWT_PUBLIC_KEY`    | RSA public key for JWT verification    | Yes      | -                     |
-| `JWT_KEY_ID`        | Key identifier for JWKS                | No       | auth-service-key-1    |
-| `JWT_ISSUER`        | JWT issuer claim                       | No       | auth-service          |
-| `PORT`              | Server port                            | No       | 3000                  |
-| `NODE_ENV`          | Environment                            | No       | development           |
-| `CORS_ORIGINS`      | Allowed CORS origins (comma-separated) | No       | http://localhost:3000 |
+| Variable                   | Description                                                                                            | Required |
+| -------------------------- | ------------------------------------------------------------------------------------------------------ | -------- |
+| `NODE_ENV`                 | Environment (`development`, `testing`, `staging`, `production`; Jest uses `test` via `tests/setup.ts`) | Yes      |
+| `PORT`                     | Server port                                                                                            | Yes      |
+| `DATABASE_URL`             | PostgreSQL connection string (auth service)                                                            | Yes      |
+| `SUBSCRIPTION_CURRENCY`    | Currency code for seeded subscription plans                                                            | Yes      |
+| `REDIS_URL`                | Redis connection string                                                                                | Yes      |
+| `RABBITMQ_URL`             | RabbitMQ connection string                                                                             | Yes      |
+| `RABBITMQ_EXCHANGE`        | RabbitMQ exchange name                                                                                 | Yes      |
+| `JWT_PRIVATE_KEY`          | RSA private key for JWT signing                                                                        | Yes      |
+| `JWT_PUBLIC_KEY`           | RSA public key for JWT verification                                                                    | Yes      |
+| `JWT_KEY_ID`               | Key identifier for JWKS                                                                                | Yes      |
+| `JWT_ISSUER`               | JWT issuer claim                                                                                       | Yes      |
+| `JWT_ACCESS_TOKEN_EXPIRY`  | Access token expiry (e.g. `7d`)                                                                        | Yes      |
+| `JWT_REFRESH_TOKEN_EXPIRY` | Refresh token expiry (e.g. `7d`)                                                                       | Yes      |
+| `RATE_LIMIT_WINDOW_MS`     | Rate limit window in milliseconds                                                                      | Yes      |
+| `RATE_LIMIT_MAX_REQUESTS`  | Max requests per window                                                                                | Yes      |
+| `EMAIL_FROM`               | Sender email address                                                                                   | Yes      |
+| `EMAIL_SERVICE_URL`        | Email service URL (empty if unused)                                                                    | Yes      |
+| `GOOGLE_CLIENT_ID`         | Google OAuth client ID (empty if unused)                                                               | Yes      |
+| `ARGON2_MEMORY`            | Argon2 memory cost                                                                                     | Yes      |
+| `ARGON2_ITERATIONS`        | Argon2 time cost                                                                                       | Yes      |
+| `ARGON2_PARALLELISM`       | Argon2 parallelism                                                                                     | Yes      |
+| `LOG_LEVEL`                | Log level                                                                                              | Yes      |
+
+All variables must be set in the environment file. There are no code-level defaults. In `staging` and `production`, `localhost` and `127.0.0.1` are rejected in `DATABASE_URL`, Redis/RabbitMQ URLs, and non-empty `EMAIL_SERVICE_URL`. CORS allows any origin. Refresh-token and CSRF cookies use `secure: true` and `sameSite: strict` in staging, testing, and production.
 
 ## Running the Application
 
@@ -143,6 +157,15 @@ npm run dev
 npm run build
 npm run start:dev
 ```
+
+### Testing (deployed test server)
+
+```bash
+npm run build
+npm run start:testing
+```
+
+Uses `NODE_ENV=testing` and `.env.testing`. Localhost URLs are allowed. This is separate from Jest (`NODE_ENV=test`).
 
 ### Staging
 
@@ -158,21 +181,37 @@ npm run build
 npm run start:prod
 ```
 
+## Logging
+
+Logs are written under `logs/` (created at startup, gitignored). Each file only contains messages for that area:
+
+| File           | Contents                                                               |
+| -------------- | ---------------------------------------------------------------------- |
+| `app.log`      | HTTP requests, server lifecycle, auth/business errors, JWKS generation |
+| `rabbitmq.log` | RabbitMQ connection and publish events                                 |
+| `redis.log`    | Redis client, token revocation, PKCE, JWKS cache in Redis              |
+| `email.log`    | OTP/email send and email logging                                       |
+
+Logging uses [Pino](https://getpino.io/) ([`src/utils/logger.ts`](src/utils/logger.ts)). Level is controlled by `LOG_LEVEL` in your env file. In `development` and `testing`, logs also print to the console (pretty-printed). Jest (`NODE_ENV=test`) uses silent loggers so no files are written during `npm test`.
+
+For production, configure log rotation externally (e.g. logrotate) if needed.
+
 ## Environment Management
 
-The application uses a simple environment loader (`src/env.ts`) that:
+The application uses an environment loader ([`src/config/env.ts`](src/config/env.ts)) that:
 
-- Loads `.env.{NODE_ENV}` file based on the environment (e.g., `.env.staging`, `.env.production`)
-- Falls back to `.env` for development
-- Loads `.env.local` for local overrides (highest priority)
-- Validates required environment variables
+- Loads `.env.development` for development, `.env.testing` for the test server, or `.env.{NODE_ENV}` for staging/production
+- Requires all configuration values to be present in the environment file (no code defaults)
+- Rejects `localhost` and `127.0.0.1` in staging and production for service URLs
+- CORS allows requests from any origin (`origin: true` with credentials)
 
 ### Environment Files
 
-- **Development**: `.env` - Default development settings
-- **Staging**: `.env.staging` - Pre-production testing environment
-- **Production**: `.env.production` - Production environment with strict security
-- **Local Overrides**: `.env.local` - Local development overrides (ignored by git)
+- **Development**: `.env.development` - Local development (see `.env.example`)
+- **Testing server**: `.env.testing` - Deployed test environment with localhost (see `.env.testing.example`)
+- **Staging**: `.env.staging` - Pre-production (see `.env.staging.example`)
+- **Production**: `.env.production` - Production (see `.env.production.example`)
+- **Jest / CI**: `NODE_ENV=test`; variables set in `tests/setup.ts` (no env file loaded)
 
 ### Environment Commands
 
@@ -181,7 +220,11 @@ The application uses a simple environment loader (`src/env.ts`) that:
 npm run dev                    # Start dev server
 npm run db:push               # Push schema
 npm run db:migrate            # Run migrations
-npm run db:seed               # Seed database
+npm run db:seed               # Seed subscription plans
+
+# Testing server
+npm run dev:testing           # Start test server locally with .env.testing
+npm run start:testing         # Start built app on test server
 
 # Staging
 npm run dev:staging           # Start staging server
@@ -191,21 +234,9 @@ npm run start:prod            # Start production server
 npm run db:migrate:prod       # Deploy migrations to production
 ```
 
-## Test Users
+## Subscription plans (seed)
 
-After running the seed script (`npm run db:seed`), you'll have two test users:
-
-**Normal User:**
-
-- Email: `user@example.com`
-- Password: `user123`
-- Role: `USER`
-
-**Admin User:**
-
-- Email: `admin@example.com`
-- Password: `admin123`
-- Role: `ADMIN`
+After running `npm run db:seed`, the database includes Base, Standard, and Premium plans (skipped if plans already exist). See [docs/SUBSCRIPTIONS.md](./docs/SUBSCRIPTIONS.md).
 
 Both users are pre-verified and ready for testing authentication endpoints.
 
@@ -260,6 +291,16 @@ async function consumeUserCreatedEvents() {
 
 ### Public Endpoints
 
+#### CSRF Token (Browser clients)
+
+Browser clients that use cookie-based refresh tokens must obtain a CSRF token before `POST /auth/login` (with `clientType: "browser"`), `POST /auth/google` (browser), `POST /auth/refresh` (when using the refresh cookie), or `POST /auth/logout` (when using the refresh cookie). Mobile clients and body-only refresh/logout are unchanged.
+
+```http
+GET /auth/csrf-token
+```
+
+Response sets an `httpOnly` `csrfToken` cookie and returns the same value in JSON. Store the token from the response body (not `document.cookie`) and send it on protected POSTs as the `X-CSRF-Token` header with `credentials: 'include'`. Re-fetch after 24 hours or on `403` with code `CSRF_VALIDATION_FAILED`.
+
 #### Register User
 
 ```http
@@ -274,9 +315,12 @@ Content-Type: application/json
 
 #### Login (Browser)
 
+Requires a valid CSRF token (see [CSRF Token](#csrf-token-browser-clients)).
+
 ```http
 POST /auth/login
 Content-Type: application/json
+X-CSRF-Token: <csrf-token-from-get-auth-csrf-token>
 
 {
   "email": "user@example.com",
@@ -284,6 +328,8 @@ Content-Type: application/json
   "clientType": "browser"
 }
 ```
+
+The refresh token is returned in an `httpOnly` cookie, not in the response body.
 
 #### Login (Mobile with PKCE)
 
@@ -300,6 +346,15 @@ Content-Type: application/json
 ```
 
 #### Refresh Token
+
+**Browser (cookie):** send `X-CSRF-Token` and include credentials; no body required if the refresh cookie is set.
+
+```http
+POST /auth/refresh
+X-CSRF-Token: <csrf-token>
+```
+
+**Mobile (body):** no CSRF header required.
 
 ```http
 POST /auth/refresh
@@ -540,7 +595,7 @@ jwt.verify(
     } else {
       console.log("Token verified:", decoded);
     }
-  }
+  },
 );
 ```
 
@@ -551,7 +606,7 @@ The service includes:
 - Request logging with response times
 - Error logging with stack traces
 - Security event logging (token revocation, failed logins)
-- Health check endpoint at `/health`
+- Health check at `GET /health` (database, Redis, RabbitMQ); returns `503` when any dependency is down
 
 ## Deployment
 

@@ -1,9 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
+import { appLogger } from '../utils/logger';
 import rateLimit from 'express-rate-limit';
 import { JWTUtils } from '../utils/crypto';
 import { redisService } from '../services/redis';
 import { config } from '../config/env';
 import { AuthError, ValidationError } from '../types';
+import { SubscriptionError } from '../types/subscription';
+
+export { validateCsrf, requiresCsrfProtection } from './csrf';
 
 /**
  * Authentication middleware
@@ -140,7 +144,7 @@ export const errorHandler = (
    res: Response,
    _next: NextFunction
 ): void => {
-   console.error('Error:', error);
+   appLogger.error({ err: error }, 'Request error');
 
    // Handle specific error types
    if (error instanceof ValidationError) {
@@ -153,6 +157,14 @@ export const errorHandler = (
    }
 
    if (error instanceof AuthError) {
+      res.status(error.statusCode).json({
+         error: error.message,
+         code: error.code,
+      });
+      return;
+   }
+
+   if (error instanceof SubscriptionError) {
       res.status(error.statusCode).json({
          error: error.message,
          code: error.code,
@@ -214,31 +226,23 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction): 
 
    res.on('finish', () => {
       const duration = Date.now() - start;
-      console.log(`${req.method} ${req.path} ${res.statusCode} - ${duration}ms`);
+      appLogger.info(
+         { method: req.method, path: req.path, statusCode: res.statusCode, durationMs: duration },
+         'HTTP request'
+      );
    });
 
    next();
 };
 
 /**
- * CORS middleware configuration
+ * CORS middleware configuration — allow any origin (reflects request origin for credentials)
  */
 export const corsOptions = {
-   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-      // Allow requests with no origin (mobile apps, Postman, etc.)
-      if (!origin) {
-         return callback(null, true);
-      }
-
-      if (config.CORS_ORIGINS.includes(origin)) {
-         callback(null, true);
-      } else {
-         callback(new Error('Not allowed by CORS'));
-      }
-   },
+   origin: true,
    credentials: true,
    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-   allowedHeaders: ['Content-Type', 'Authorization'],
+   allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
 };
 
 /**

@@ -1,0 +1,31 @@
+# Maps stored plan feature keys/values to user-facing sentences in API responses.
+# Used by src/utils/formatSubscriptionPlanFeatures.ts
+
+displayOrder:
+  - audiobookCatalog
+  - maxDevices
+  - audioQuality
+  - deviceChangesPerMonth
+
+keys:
+  audiobookCatalog:
+    selected: Selected range of audiobook titles
+    curated_wide: Wide range of curated audiobook titles
+    all: All audiobook titles available
+
+  maxDevices:
+    "1": Available on 1 device
+    "2": Available on 2 devices
+    "3": Available on 3 devices
+    default: Available on {{value}} devices
+
+  audioQuality:
+    base: Base audio quality
+    high: Higher audio quality
+    best: Best audio quality
+
+  deviceChangesPerMonth:
+    "0": null
+    "1": Add/remove devices 1 time a month
+    "3": Add/remove devices 3 times a month
+    default: Add/remove devices {{value}} times a month

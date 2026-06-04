@@ -1,5 +1,6 @@
 import { PrismaClient, EmailType } from '@prisma/client';
 import { config } from '../config/env';
+import { emailLogger } from '../utils/logger';
 
 // Prisma 7 reads connection from prisma.config.ts automatically
 const prisma = new PrismaClient();
@@ -25,22 +26,19 @@ export class EmailService {
             await this.sendEmailViaAPI(email, subject, body);
          } else {
             // Log email in development (for testing)
-            console.log(`[EMAIL] To: ${email}`);
-            console.log(`[EMAIL] Subject: ${subject}`);
-            console.log(`[EMAIL] Body: ${body}`);
-            console.log(`[EMAIL] OTP Code: ${otp}`);
+            emailLogger.info({ to: email, subject, body, otp }, 'OTP email (dev mode, no EMAIL_SERVICE_URL)');
          }
 
          // Log email to database
          await this.logEmail(email, subject, body, EmailType.OTP, userId);
       } catch (error) {
          // Log error but don't fail the auth flow
-         console.error('Failed to send OTP email:', error);
+         emailLogger.error({ err: error, to: email, purpose }, 'Failed to send OTP email');
          // Still log the email attempt to database
          try {
             await this.logEmail(email, subject, body, EmailType.OTP, userId);
          } catch (logError) {
-            console.error('Failed to log email:', logError);
+            emailLogger.error({ err: logError, to: email }, 'Failed to log email after send failure');
          }
       }
    }
@@ -151,7 +149,7 @@ AudioBook Team
          });
       } catch (error) {
          // Log error but don't throw - email logging shouldn't break the flow
-         console.error('Failed to log email to database:', error);
+         emailLogger.error({ err: error, recipientAddress }, 'Failed to log email to database');
       }
    }
 }

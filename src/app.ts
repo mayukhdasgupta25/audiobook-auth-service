@@ -4,6 +4,8 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import { config } from './config/env';
 import authRoutes from './routes/auth';
+import subscriptionPlanRoutes from './routes/subscriptionPlan';
+import userSubscriptionRoutes from './routes/userSubscription';
 import {
    errorHandler,
    notFound,
@@ -13,6 +15,8 @@ import {
 } from './middleware';
 import { redisService } from './services/redis';
 import { rabbitmqService } from './services/rabbitmq';
+import { getDependencyHealth, isDependencyHealthOk } from './services/health';
+import { appLogger } from './utils/logger';
 
 /**
  * Create and configure Express application
@@ -35,18 +39,24 @@ export const createApp = (): express.Application => {
    // Request logging
    app.use(requestLogger);
 
-   // Health check endpoint
-   app.get('/health', (_req, res) => {
-      res.json({
-         status: 'healthy',
+   // Health check endpoint (database, Redis, RabbitMQ)
+   app.get('/health', async (_req, res) => {
+      const checks = await getDependencyHealth();
+      const healthy = isDependencyHealthOk(checks);
+
+      res.status(healthy ? 200 : 503).json({
+         status: healthy ? 'healthy' : 'unhealthy',
          timestamp: new Date().toISOString(),
          service: 'auth-service',
          version: '1.0.0',
+         checks,
       });
    });
 
    // API routes
    app.use('/auth', authRoutes);
+   app.use('/auth/subscription-plans', subscriptionPlanRoutes);
+   app.use('/auth/subscriptions', userSubscriptionRoutes);
 
    // Root endpoint
    app.get('/', (_req, res) => {
@@ -57,6 +67,9 @@ export const createApp = (): express.Application => {
             health: '/health',
             auth: '/auth',
             jwks: '/auth/.well-known/jwks.json',
+            subscriptionPlans: '/auth/subscription-plans',
+            subscriptions: '/auth/subscriptions',
+            devices: '/auth/devices',
          },
       });
    });
@@ -68,18 +81,60 @@ export const createApp = (): express.Application => {
    return app;
 };
 
+const STARTUP_CONNECT_ATTEMPTS = 3;
+const STARTUP_CONNECT_RETRY_DELAY_MS = 1000;
+
+function sleep(ms: number): Promise<void> {
+   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function connectServiceWithRetries(
+   serviceName: 'RabbitMQ' | 'Redis',
+   connect: () => Promise<void>,
+   cleanup: () => Promise<void>
+): Promise<void> {
+   let lastError: unknown;
+
+   for (let attempt = 1; attempt <= STARTUP_CONNECT_ATTEMPTS; attempt++) {
+      try {
+         await connect();
+         if (attempt > 1) {
+            appLogger.info({ serviceName, attempt }, 'Connected after retry');
+         }
+         return;
+      } catch (error) {
+         lastError = error;
+         await cleanup().catch(() => undefined);
+
+         if (attempt < STARTUP_CONNECT_ATTEMPTS) {
+            appLogger.warn(
+               { err: error, serviceName, attempt, maxAttempts: STARTUP_CONNECT_ATTEMPTS },
+               'Connection failed, retrying'
+            );
+            await sleep(STARTUP_CONNECT_RETRY_DELAY_MS);
+         }
+      }
+   }
+
+   throw lastError;
+}
+
 /**
  * Initialize services and start the server
  */
 export const startServer = async (): Promise<void> => {
    try {
-      // Connect to RabbitMQ
-      await rabbitmqService.connect();
-      console.log('Connected to RabbitMQ');
+      await connectServiceWithRetries(
+         'RabbitMQ',
+         () => rabbitmqService.connect(),
+         () => rabbitmqService.disconnect()
+      );
 
-      // Connect to Redis
-      await redisService.connect();
-      console.log('Connected to Redis');
+      await connectServiceWithRetries(
+         'Redis',
+         () => redisService.connect(),
+         () => redisService.disconnect()
+      );
 
       // Create Express app
       const app = createApp();
@@ -87,28 +142,32 @@ export const startServer = async (): Promise<void> => {
       // Start server
       const port = config.PORT;
       app.listen(port, () => {
-         console.log(`Auth service running on port ${port}`);
-         console.log(`Environment: ${config.NODE_ENV}`);
-         console.log(`JWKS endpoint: http://localhost:${port}/auth/.well-known/jwks.json`);
+         appLogger.info({ port, nodeEnv: config.NODE_ENV }, 'Auth service running');
+         const jwksPath = '/auth/.well-known/jwks.json';
+         if (config.NODE_ENV === 'development' || config.NODE_ENV === 'test' || config.NODE_ENV === 'testing') {
+            appLogger.info({ jwksUrl: `http://localhost:${port}${jwksPath}` }, 'JWKS endpoint');
+         } else {
+            appLogger.info({ jwksPath }, 'JWKS endpoint');
+         }
       });
 
       // Graceful shutdown
       process.on('SIGTERM', async () => {
-         console.log('SIGTERM received, shutting down gracefully');
+         appLogger.info('SIGTERM received, shutting down gracefully');
          await rabbitmqService.disconnect();
          await redisService.disconnect();
          process.exit(0);
       });
 
       process.on('SIGINT', async () => {
-         console.log('SIGINT received, shutting down gracefully');
+         appLogger.info('SIGINT received, shutting down gracefully');
          await rabbitmqService.disconnect();
          await redisService.disconnect();
          process.exit(0);
       });
 
    } catch (error) {
-      console.error('Failed to start server:', error);
+      appLogger.error({ err: error }, 'Failed to start server');
       process.exit(1);
    }
 };

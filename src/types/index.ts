@@ -36,6 +36,18 @@ export interface JWKS {
 export interface RegisterRequest {
    email: string;
    password: string;
+   role?: Role;
+}
+
+export interface DeviceContext {
+   deviceId: string;
+   deviceName?: string;
+   platform?: string;
+}
+
+export interface DeviceRequestMeta {
+   userAgent?: string;
+   ipAddress?: string;
 }
 
 export interface LoginRequest {
@@ -43,6 +55,7 @@ export interface LoginRequest {
    password: string;
    clientType?: 'browser' | 'mobile';
    app?: string;
+   device: DeviceContext;
 }
 
 export interface MobileLoginRequest extends LoginRequest {
@@ -70,6 +83,7 @@ export interface GoogleOAuthRequest {
    token: string;
    clientType?: 'browser' | 'mobile';
    app?: string;
+   device: DeviceContext;
 }
 
 // Response interfaces
@@ -97,11 +111,20 @@ export interface UserResponse {
 export class AuthError extends Error {
    statusCode: number;
    code: string;
+   details?: Record<string, unknown> | undefined;
 
-   constructor(message: string, statusCode: number = 401, code: string = 'AUTH_ERROR') {
+   constructor(
+      message: string,
+      statusCode: number = 401,
+      code: string = 'AUTH_ERROR',
+      details?: Record<string, unknown> | undefined,
+   ) {
       super(message);
       this.statusCode = statusCode;
       this.code = code;
+      if (details !== undefined) {
+         this.details = details;
+      }
       this.name = 'AuthError';
    }
 }
@@ -175,6 +198,9 @@ export { OtpPurpose, EmailType };
 export interface VerifyOTPRequest {
    email: string;
    otp: string;
+   firstName?: string;
+   lastName?: string;
+   device: DeviceContext;
 }
 
 export interface ResendOTPRequest {
@@ -206,4 +232,14 @@ export interface VerifyForgotPasswordOTPRequest {
 export interface ResetPasswordRequest {
    email: string;
    newPassword: string;
+}
+
+export interface RequestDeviceRemovalOtpRequest {
+   email: string;
+   deviceId: string;
+}
+
+export interface RemoveDeviceWithOtpRequest {
+   email: string;
+   otp: string;
 }
