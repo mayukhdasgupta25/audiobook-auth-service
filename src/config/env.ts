@@ -40,19 +40,6 @@ function requireIntEnv(key: string): number {
    return parsed;
 }
 
-function requireCorsOrigins(): string[] {
-   const origins = requireEnv("CORS_ORIGINS")
-      .split(",")
-      .map((origin) => origin.trim())
-      .filter(Boolean);
-
-   if (origins.length === 0) {
-      throw new Error("CORS_ORIGINS must contain at least one origin");
-   }
-
-   return origins;
-}
-
 function assertNoLocalhost(envVar: string, value: string, nodeEnv: string): void {
    if (LOCALHOST_PATTERN.test(value)) {
       throw new Error(`${envVar} must not reference localhost in ${nodeEnv}`);
@@ -65,7 +52,6 @@ function validateNoLocalhostInStagingOrProduction(
       DATABASE_URL: string;
       REDIS_URL: string;
       RABBITMQ_URL: string;
-      CORS_ORIGINS: string[];
       EMAIL_SERVICE_URL: string;
    }
 ): void {
@@ -76,10 +62,6 @@ function validateNoLocalhostInStagingOrProduction(
    assertNoLocalhost("DATABASE_URL", values.DATABASE_URL, nodeEnv);
    assertNoLocalhost("REDIS_URL", values.REDIS_URL, nodeEnv);
    assertNoLocalhost("RABBITMQ_URL", values.RABBITMQ_URL, nodeEnv);
-
-   for (const origin of values.CORS_ORIGINS) {
-      assertNoLocalhost("CORS_ORIGINS", origin, nodeEnv);
-   }
 
    if (values.EMAIL_SERVICE_URL) {
       assertNoLocalhost("EMAIL_SERVICE_URL", values.EMAIL_SERVICE_URL, nodeEnv);
@@ -93,18 +75,16 @@ const nodeEnv = requireEnv("NODE_ENV");
 const DATABASE_URL = requireEnv("DATABASE_URL");
 const REDIS_URL = requireEnv("REDIS_URL");
 const RABBITMQ_URL = requireEnv("RABBITMQ_URL");
-const CORS_ORIGINS = requireCorsOrigins();
 const EMAIL_SERVICE_URL = requireEnv("EMAIL_SERVICE_URL");
 
 validateNoLocalhostInStagingOrProduction(nodeEnv, {
    DATABASE_URL,
    REDIS_URL,
    RABBITMQ_URL,
-   CORS_ORIGINS,
    EMAIL_SERVICE_URL,
 });
 
-const USE_SECURE_COOKIES = nodeEnv === "production" || nodeEnv === "staging";
+const USE_SECURE_COOKIES = nodeEnv === "production" || nodeEnv === "staging" || nodeEnv === "testing";
 
 export const config = {
    NODE_ENV: nodeEnv,
@@ -124,7 +104,6 @@ export const config = {
    JWT_ACCESS_TOKEN_EXPIRY: requireEnv("JWT_ACCESS_TOKEN_EXPIRY"),
    JWT_REFRESH_TOKEN_EXPIRY: requireEnv("JWT_REFRESH_TOKEN_EXPIRY"),
 
-   CORS_ORIGINS,
    RATE_LIMIT_WINDOW_MS: requireIntEnv("RATE_LIMIT_WINDOW_MS"),
    RATE_LIMIT_MAX_REQUESTS: requireIntEnv("RATE_LIMIT_MAX_REQUESTS"),
 

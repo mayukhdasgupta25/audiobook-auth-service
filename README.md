@@ -133,7 +133,6 @@ npm run db:seed
 | `JWT_ISSUER`               | JWT issuer claim                                                                                       | Yes      |
 | `JWT_ACCESS_TOKEN_EXPIRY`  | Access token expiry (e.g. `7d`)                                                                        | Yes      |
 | `JWT_REFRESH_TOKEN_EXPIRY` | Refresh token expiry (e.g. `7d`)                                                                       | Yes      |
-| `CORS_ORIGINS`             | Allowed CORS origins (comma-separated)                                                                 | Yes      |
 | `RATE_LIMIT_WINDOW_MS`     | Rate limit window in milliseconds                                                                      | Yes      |
 | `RATE_LIMIT_MAX_REQUESTS`  | Max requests per window                                                                                | Yes      |
 | `EMAIL_FROM`               | Sender email address                                                                                   | Yes      |
@@ -144,7 +143,7 @@ npm run db:seed
 | `ARGON2_PARALLELISM`       | Argon2 parallelism                                                                                     | Yes      |
 | `LOG_LEVEL`                | Log level                                                                                              | Yes      |
 
-All variables must be set in the environment file. There are no code-level defaults. In `staging` and `production`, `localhost` and `127.0.0.1` are rejected in `DATABASE_URL`, Redis/RabbitMQ URLs, and CORS origins. Refresh-token cookies use `secure: true` and `sameSite: strict` in staging and production.
+All variables must be set in the environment file. There are no code-level defaults. In `staging` and `production`, `localhost` and `127.0.0.1` are rejected in `DATABASE_URL`, Redis/RabbitMQ URLs, and non-empty `EMAIL_SERVICE_URL`. CORS allows any origin. Refresh-token and CSRF cookies use `secure: true` and `sameSite: strict` in staging, testing, and production.
 
 ## Running the Application
 
@@ -203,7 +202,8 @@ The application uses an environment loader ([`src/config/env.ts`](src/config/env
 
 - Loads `.env.development` for development, `.env.testing` for the test server, or `.env.{NODE_ENV}` for staging/production
 - Requires all configuration values to be present in the environment file (no code defaults)
-- Rejects `localhost` and `127.0.0.1` in staging and production for URLs and CORS origins
+- Rejects `localhost` and `127.0.0.1` in staging and production for service URLs
+- CORS allows requests from any origin (`origin: true` with credentials)
 
 ### Environment Files
 
@@ -291,6 +291,16 @@ async function consumeUserCreatedEvents() {
 
 ### Public Endpoints
 
+#### CSRF Token (Browser clients)
+
+Browser clients that use cookie-based refresh tokens must obtain a CSRF token before `POST /auth/login` (with `clientType: "browser"`), `POST /auth/google` (browser), `POST /auth/refresh` (when using the refresh cookie), or `POST /auth/logout` (when using the refresh cookie). Mobile clients and body-only refresh/logout are unchanged.
+
+```http
+GET /auth/csrf-token
+```
+
+Response sets an `httpOnly` `csrfToken` cookie and returns the same value in JSON. Store the token from the response body (not `document.cookie`) and send it on protected POSTs as the `X-CSRF-Token` header with `credentials: 'include'`. Re-fetch after 24 hours or on `403` with code `CSRF_VALIDATION_FAILED`.
+
 #### Register User
 
 ```http
@@ -305,9 +315,12 @@ Content-Type: application/json
 
 #### Login (Browser)
 
+Requires a valid CSRF token (see [CSRF Token](#csrf-token-browser-clients)).
+
 ```http
 POST /auth/login
 Content-Type: application/json
+X-CSRF-Token: <csrf-token-from-get-auth-csrf-token>
 
 {
   "email": "user@example.com",
@@ -315,6 +328,8 @@ Content-Type: application/json
   "clientType": "browser"
 }
 ```
+
+The refresh token is returned in an `httpOnly` cookie, not in the response body.
 
 #### Login (Mobile with PKCE)
 
@@ -331,6 +346,15 @@ Content-Type: application/json
 ```
 
 #### Refresh Token
+
+**Browser (cookie):** send `X-CSRF-Token` and include credentials; no body required if the refresh cookie is set.
+
+```http
+POST /auth/refresh
+X-CSRF-Token: <csrf-token>
+```
+
+**Mobile (body):** no CSRF header required.
 
 ```http
 POST /auth/refresh

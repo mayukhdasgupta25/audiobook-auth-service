@@ -7,6 +7,8 @@ import { config } from '../config/env';
 import { AuthError, ValidationError } from '../types';
 import { SubscriptionError } from '../types/subscription';
 
+export { validateCsrf, requiresCsrfProtection } from './csrf';
+
 /**
  * Authentication middleware
  */
@@ -234,24 +236,13 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction): 
 };
 
 /**
- * CORS middleware configuration
+ * CORS middleware configuration — allow any origin (reflects request origin for credentials)
  */
 export const corsOptions = {
-   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-      // Allow requests with no origin (mobile apps, Postman, etc.)
-      if (!origin) {
-         return callback(null, true);
-      }
-
-      if (config.CORS_ORIGINS.includes(origin)) {
-         callback(null, true);
-      } else {
-         callback(new Error('Not allowed by CORS'));
-      }
-   },
+   origin: true,
    credentials: true,
    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-   allowedHeaders: ['Content-Type', 'Authorization'],
+   allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
 };
 
 /**

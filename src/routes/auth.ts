@@ -8,7 +8,8 @@ import {
    loginRateLimit,
    passwordResetRateLimit,
    registerRateLimit,
-   generalRateLimit
+   generalRateLimit,
+   validateCsrf,
 } from '../middleware';
 
 const router = Router();
@@ -17,14 +18,15 @@ const router = Router();
 router.use(generalRateLimit);
 
 // Public routes
+router.get('/csrf-token', authController.getCsrfToken.bind(authController));
 router.post('/register', registerRateLimit, authController.register.bind(authController));
-router.post('/login', loginRateLimit, authController.login.bind(authController));
+router.post('/login', loginRateLimit, validateCsrf, authController.login.bind(authController));
 router.post('/verify-registration-otp', loginRateLimit, authController.verifyRegistrationOTP.bind(authController));
 router.post('/resend-otp', loginRateLimit, authController.resendOTP.bind(authController));
 router.post('/login/mobile', loginRateLimit, authController.mobileLogin.bind(authController));
-router.post('/google', loginRateLimit, authController.googleOAuth.bind(authController));
-router.post('/refresh', authController.refreshToken.bind(authController));
-router.post('/logout', authController.logout.bind(authController));
+router.post('/google', loginRateLimit, validateCsrf, authController.googleOAuth.bind(authController));
+router.post('/refresh', validateCsrf, authController.refreshToken.bind(authController));
+router.post('/logout', validateCsrf, authController.logout.bind(authController));
 router.post('/verify-email', authController.verifyEmail.bind(authController));
 router.post('/forgot-password', passwordResetRateLimit, authController.forgotPassword.bind(authController));
 router.post('/verify-forgot-password-otp', passwordResetRateLimit, authController.verifyForgotPasswordOTP.bind(authController));
