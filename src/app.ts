@@ -24,6 +24,12 @@ import { appLogger } from './utils/logger';
 export const createApp = (): express.Application => {
    const app = express();
 
+   // Express trust proxy hop count (see TRUST_PROXY in env). Required behind nginx for
+   // express-rate-limit (X-Forwarded-For) and secure cookies over HTTPS.
+   if (config.TRUST_PROXY > 0) {
+      app.set('trust proxy', config.TRUST_PROXY);
+   }
+
    // Security middleware
    app.use(helmet());
    app.use(securityHeaders);
