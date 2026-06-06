@@ -90,6 +90,7 @@ export const config = {
    NODE_ENV: nodeEnv,
    PORT: requireIntEnv("PORT"),
    USE_SECURE_COOKIES,
+   TRUST_PROXY: requireIntEnv("TRUST_PROXY"),
 
    DATABASE_URL,
    SUBSCRIPTION_CURRENCY: requireEnv("SUBSCRIPTION_CURRENCY"),

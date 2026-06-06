@@ -16,6 +16,7 @@ const testKeys = {
 
 // Set all required environment variables before any config-dependent imports
 process.env['PORT'] = '8082';
+process.env['TRUST_PROXY'] = '0';
 process.env['DATABASE_URL'] = 'postgresql://test:test@localhost:5432/test_auth_service';
 process.env['SUBSCRIPTION_CURRENCY'] = 'INR';
 process.env['REDIS_URL'] = 'redis://localhost:6379';
