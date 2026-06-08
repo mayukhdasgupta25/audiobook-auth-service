@@ -1,3 +1,4 @@
+import fs from 'fs';
 import path from 'path';
 import pino, { Logger, multistream } from 'pino';
 import pretty from 'pino-pretty';
@@ -14,18 +15,26 @@ const SERVICE_LOG_FILES: Record<ServiceName, string> = {
    email: 'email.log',
 };
 
+function ensureLogDir(): string {
+   const logDir = path.resolve(process.cwd(), LOG_DIR);
+   if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+   }
+   return logDir;
+}
+
+function createFileDestination(logDir: string, filename: string) {
+   const fd = fs.openSync(path.join(logDir, filename), 'a');
+   return pino.destination({ fd, minLength: 0, sync: false });
+}
+
 function createServiceLogger(service: ServiceName): Logger {
    if (config.NODE_ENV === 'test') {
       return pino({ level: 'silent' });
    }
 
-   const logPath = path.join(process.cwd(), LOG_DIR, SERVICE_LOG_FILES[service]);
-   const fileStream = pino.destination({
-      dest: logPath,
-      append: true,
-      mkdir: true,
-      sync: false,
-   });
+   const logDir = ensureLogDir();
+   const fileStream = createFileDestination(logDir, SERVICE_LOG_FILES[service]);
 
    const loggerOptions = {
       level: config.LOG_LEVEL,
