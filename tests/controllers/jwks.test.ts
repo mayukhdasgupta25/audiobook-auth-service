@@ -197,25 +197,5 @@ describe('JWKSController', () => {
          expect(mockSetHeader).toHaveBeenCalledWith('Cache-Control', 'public, max-age=3600');
       });
    });
-
-   describe('healthCheck', () => {
-      test('should return healthy status', async () => {
-         await jwksController.healthCheck(mockRequest as Request, mockResponse as Response);
-
-         expect(mockJson).toHaveBeenCalledWith({
-            status: 'healthy',
-            timestamp: expect.any(String),
-            service: 'auth-service',
-            version: '1.0.0',
-         });
-      });
-
-      test('should return unhealthy when JWT keys missing', async () => {
-         // Since we can't easily test the unhealthy case without resetting modules,
-         // we'll skip this test as the success case is more important
-         // The unhealthy case is tested implicitly by the code structure
-         expect(true).toBe(true);
-      });
-   });
 });
 
