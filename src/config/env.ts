@@ -46,6 +46,14 @@ function assertNoLocalhost(envVar: string, value: string, nodeEnv: string): void
    }
 }
 
+const HEALTH_SUPPORT_EMAIL_DOMAIN = '@srota-support.com';
+
+function validateHealthSupportEmail(email: string): void {
+   if (!email.toLowerCase().endsWith(HEALTH_SUPPORT_EMAIL_DOMAIN)) {
+      throw new Error(`HEALTH_SUPPORT_EMAIL must end with ${HEALTH_SUPPORT_EMAIL_DOMAIN}`);
+   }
+}
+
 function validateNoLocalhostInStagingOrProduction(
    nodeEnv: string,
    values: {
@@ -86,6 +94,10 @@ validateNoLocalhostInStagingOrProduction(nodeEnv, {
 
 const USE_SECURE_COOKIES = nodeEnv === "production" || nodeEnv === "staging" || nodeEnv === "testing";
 
+const HEALTH_SUPPORT_EMAIL = requireEnv("HEALTH_SUPPORT_EMAIL");
+const HEALTH_SUPPORT_PASSWORD = requireEnv("HEALTH_SUPPORT_PASSWORD");
+validateHealthSupportEmail(HEALTH_SUPPORT_EMAIL);
+
 export const config = {
    NODE_ENV: nodeEnv,
    PORT: requireIntEnv("PORT"),
@@ -117,4 +129,7 @@ export const config = {
    ARGON2_PARALLELISM: requireIntEnv("ARGON2_PARALLELISM"),
 
    LOG_LEVEL: requireEnv("LOG_LEVEL"),
+
+   HEALTH_SUPPORT_EMAIL,
+   HEALTH_SUPPORT_PASSWORD,
 };
