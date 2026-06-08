@@ -94,34 +94,6 @@ export class JWKSController {
          });
       }
    }
-
-   /**
-    * Health check endpoint
-    */
-   async healthCheck(_req: Request, res: Response): Promise<void> {
-      try {
-         // Check if JWT keys are properly configured
-         if (!config.JWT_PRIVATE_KEY || !config.JWT_PUBLIC_KEY) {
-            res.status(503).json({
-               status: 'unhealthy',
-               error: 'JWT keys not configured',
-            });
-            return;
-         }
-
-         res.json({
-            status: 'healthy',
-            timestamp: new Date().toISOString(),
-            service: 'auth-service',
-            version: '1.0.0',
-         });
-      } catch (_error) {
-         res.status(500).json({
-            status: 'unhealthy',
-            error: 'Health check failed',
-         });
-      }
-   }
 }
 
 export const jwksController = new JWKSController();

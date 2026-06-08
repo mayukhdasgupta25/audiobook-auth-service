@@ -35,9 +35,6 @@ router.post('/reset-password', authController.resetPassword.bind(authController)
 // JWKS endpoint (public, no authentication required)
 router.get('/.well-known/jwks.json', jwksController.getJWKS.bind(jwksController));
 
-// Health check endpoint
-router.get('/health', jwksController.healthCheck.bind(jwksController));
-
 // Device management (authenticated)
 router.use('/devices', userDeviceRoutes);
 
