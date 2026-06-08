@@ -16,6 +16,7 @@ import {
 import { redisService } from './services/redis';
 import { rabbitmqService } from './services/rabbitmq';
 import { getDependencyHealth, isDependencyHealthOk } from './services/health';
+import { requireHealthSupportAuth } from './middleware/healthSupportAuth';
 import { appLogger } from './utils/logger';
 
 /**
@@ -45,8 +46,8 @@ export const createApp = (): express.Application => {
    // Request logging
    app.use(requestLogger);
 
-   // Health check endpoint (database, Redis, RabbitMQ)
-   app.get('/health', async (_req, res) => {
+   // Health check endpoint (database, Redis, RabbitMQ) — separate support auth
+   app.get('/api/auth/health', requireHealthSupportAuth, async (_req, res) => {
       const checks = await getDependencyHealth();
       const healthy = isDependencyHealthOk(checks);
 
@@ -70,7 +71,7 @@ export const createApp = (): express.Application => {
          message: 'Auth Service API',
          version: '1.0.0',
          endpoints: {
-            health: '/health',
+            health: '/api/auth/health',
             auth: '/auth',
             jwks: '/auth/.well-known/jwks.json',
             subscriptionPlans: '/auth/subscription-plans',

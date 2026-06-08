@@ -37,6 +37,8 @@ process.env['ARGON2_MEMORY'] = '65536';
 process.env['ARGON2_ITERATIONS'] = '3';
 process.env['ARGON2_PARALLELISM'] = '4';
 process.env['LOG_LEVEL'] = 'error';
+process.env['HEALTH_SUPPORT_EMAIL'] = 'no-reply@srota-support.com';
+process.env['HEALTH_SUPPORT_PASSWORD'] = 'test-health-password';
 
 // Now safe to import modules that depend on config
 // (No imports needed here - tests can import what they need)
