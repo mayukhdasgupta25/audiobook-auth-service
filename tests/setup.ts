@@ -22,6 +22,7 @@ process.env['SUBSCRIPTION_CURRENCY'] = 'INR';
 process.env['REDIS_URL'] = 'redis://localhost:6379';
 process.env['RABBITMQ_URL'] = 'amqp://localhost:5672';
 process.env['RABBITMQ_EXCHANGE'] = 'users';
+process.env['RABBITMQ_AUTHORS_EXCHANGE'] = 'authors';
 process.env['JWT_PRIVATE_KEY'] = testKeys.privateKey;
 process.env['JWT_PUBLIC_KEY'] = testKeys.publicKey;
 process.env['JWT_KEY_ID'] = 'test-key-1';

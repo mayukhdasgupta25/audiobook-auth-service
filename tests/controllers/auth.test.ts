@@ -10,6 +10,7 @@ jest.mock('../../src/services/auth', () => ({
       refreshToken: jest.fn(),
       logout: jest.fn(),
       verifyEmail: jest.fn(),
+      verifyRegistrationOTP: jest.fn(),
       forgotPassword: jest.fn(),
       resetPassword: jest.fn(),
       changePassword: jest.fn(),
@@ -105,6 +106,8 @@ describe('AuthController', () => {
          expect(authService.register).toHaveBeenCalledWith({
             email: 'test@example.com',
             password: 'password123',
+            role: 'USER',
+            type: 'USER',
          });
          expect(mockStatus).toHaveBeenCalledWith(201);
          expect(mockJson).toHaveBeenCalledWith({
@@ -112,6 +115,26 @@ describe('AuthController', () => {
             user: mockUser,
             otpSent: true,
          });
+      });
+
+      test('should reject invalid author registration payload', async () => {
+         mockRequest.body = {
+            type: 'AUTHOR',
+            email: 'author@example.com',
+            password: 'password123',
+            firstName: 'Jane',
+         };
+
+         await authController.register(mockRequest as Request, mockResponse as Response);
+
+         expect(authService.register).not.toHaveBeenCalled();
+         expect(mockStatus).toHaveBeenCalledWith(400);
+         expect(mockJson).toHaveBeenCalledWith(
+            expect.objectContaining({
+               error: 'Author registration requires additional fields',
+               code: 'VALIDATION_ERROR',
+            }),
+         );
       });
 
       test('should handle duplicate email and return 400', async () => {
@@ -236,6 +259,91 @@ describe('AuthController', () => {
             expect.objectContaining({ code: 'DEVICE_ID_REQUIRED' }),
          );
          expect(authService.login).not.toHaveBeenCalled();
+      });
+   });
+
+   describe('verifyRegistrationOTP', () => {
+      test('should allow author verification without device', async () => {
+         const mockAuthResponse = {
+            accessToken: 'access-token',
+            refreshToken: 'refresh-token',
+            user: { id: 'author-1', email: 'author@example.com' },
+         };
+         (authService.verifyRegistrationOTP as jest.Mock).mockResolvedValue(mockAuthResponse);
+
+         mockRequest.body = {
+            email: 'author@example.com',
+            otp: '123456',
+            type: 'author',
+         };
+
+         await authController.verifyRegistrationOTP(mockRequest as Request, mockResponse as Response);
+
+         expect(authService.verifyRegistrationOTP).toHaveBeenCalledWith(
+            expect.objectContaining({
+               email: 'author@example.com',
+               otp: '123456',
+               type: 'author',
+               device: undefined,
+            }),
+         );
+         expect(mockJson).toHaveBeenCalledWith(
+            expect.objectContaining({
+               accessToken: 'access-token',
+               refreshToken: 'refresh-token',
+            }),
+         );
+      });
+
+      test('should allow organization verification without device', async () => {
+         (authService.verifyRegistrationOTP as jest.Mock).mockResolvedValue({
+            accessToken: 'access-token',
+            refreshToken: 'refresh-token',
+            user: { id: 'org-1', email: 'org@example.com' },
+         });
+
+         mockRequest.body = {
+            email: 'org@example.com',
+            otp: '123456',
+            type: 'organization',
+         };
+
+         await authController.verifyRegistrationOTP(mockRequest as Request, mockResponse as Response);
+
+         expect(authService.verifyRegistrationOTP).toHaveBeenCalledWith(
+            expect.objectContaining({ type: 'organization', device: undefined }),
+         );
+      });
+
+      test('should return 400 when device is missing for non-author types', async () => {
+         mockRequest.body = {
+            email: 'user@example.com',
+            otp: '123456',
+            type: 'user',
+         };
+
+         await authController.verifyRegistrationOTP(mockRequest as Request, mockResponse as Response);
+
+         expect(mockStatus).toHaveBeenCalledWith(400);
+         expect(mockJson).toHaveBeenCalledWith(
+            expect.objectContaining({ code: 'DEVICE_ID_REQUIRED' }),
+         );
+         expect(authService.verifyRegistrationOTP).not.toHaveBeenCalled();
+      });
+
+      test('should return 400 when device is missing and type is omitted', async () => {
+         mockRequest.body = {
+            email: 'user@example.com',
+            otp: '123456',
+         };
+
+         await authController.verifyRegistrationOTP(mockRequest as Request, mockResponse as Response);
+
+         expect(mockStatus).toHaveBeenCalledWith(400);
+         expect(mockJson).toHaveBeenCalledWith(
+            expect.objectContaining({ code: 'DEVICE_ID_REQUIRED' }),
+         );
+         expect(authService.verifyRegistrationOTP).not.toHaveBeenCalled();
       });
    });
 
