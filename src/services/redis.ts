@@ -1,6 +1,6 @@
 import { createClient, RedisClientType } from 'redis';
 import { config } from '../config/env';
-import { RevokedToken, JWKS } from '../types';
+import { RevokedToken, JWKS, PendingAuthorRegistration } from '../types';
 import { redisLogger } from '../utils/logger';
 
 /**
@@ -266,6 +266,57 @@ export class RedisService {
          return true;
       } catch (_error) {
          return false;
+      }
+   }
+
+   private pendingAuthorKey(userId: string): string {
+      return `pending-author:${userId}`;
+   }
+
+   /**
+    * Store pending author registration metadata until OTP verification (10 min TTL)
+    */
+   async setPendingAuthorRegistration(
+      userId: string,
+      data: PendingAuthorRegistration,
+      ttlSeconds: number = 600,
+   ): Promise<void> {
+      try {
+         await this.client.setEx(
+            this.pendingAuthorKey(userId),
+            ttlSeconds,
+            JSON.stringify(data),
+         );
+      } catch (error) {
+         redisLogger.error({ err: error, userId }, 'Failed to store pending author registration');
+         throw new Error('Failed to store author registration data');
+      }
+   }
+
+   /**
+    * Get pending author registration metadata
+    */
+   async getPendingAuthorRegistration(userId: string): Promise<PendingAuthorRegistration | null> {
+      try {
+         const result = await this.client.get(this.pendingAuthorKey(userId));
+         if (!result) {
+            return null;
+         }
+         return JSON.parse(result) as PendingAuthorRegistration;
+      } catch (error) {
+         redisLogger.error({ err: error, userId }, 'Failed to get pending author registration');
+         return null;
+      }
+   }
+
+   /**
+    * Delete pending author registration metadata
+    */
+   async deletePendingAuthorRegistration(userId: string): Promise<void> {
+      try {
+         await this.client.del(this.pendingAuthorKey(userId));
+      } catch (error) {
+         redisLogger.error({ err: error, userId }, 'Failed to delete pending author registration');
       }
    }
 }

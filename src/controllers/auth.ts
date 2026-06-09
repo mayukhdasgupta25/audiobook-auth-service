@@ -24,9 +24,14 @@ import {
    UpdateEmailRequest,
    VerifyForgotPasswordOTPRequest,
 } from '../types';
-import { validateDeviceContext } from '../utils/deviceValidation';
+import {
+   resolveDeviceContextForRegistrationVerify,
+   validateDeviceContext,
+} from '../utils/deviceValidation';
+import { validateRegisterRequest } from '../utils/registerValidation';
 import { getDeviceRequestMeta, handleAuthControllerError } from '../utils/authController';
 import { generateCsrfToken, getCsrfCookieOptions } from '../utils/csrf';
+import { ValidationError } from '../types';
 
 const REFRESH_TOKEN_COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
 
@@ -58,7 +63,7 @@ export class AuthController {
     */
    async register(req: Request, res: Response): Promise<void> {
       try {
-         const data: RegisterRequest = req.body;
+         const data = validateRegisterRequest(req.body as RegisterRequest);
          const result = await authService.register(data);
 
          res.status(201).json({
@@ -67,6 +72,15 @@ export class AuthController {
             otpSent: result.otpSent,
          });
       } catch (error) {
+         if (error instanceof ValidationError) {
+            res.status(error.statusCode).json({
+               error: error.message,
+               code: error.code,
+               details: error.details,
+            });
+            return;
+         }
+
          res.status(400).json({
             error: error instanceof Error ? error.message : 'Registration failed',
          });
@@ -104,7 +118,7 @@ export class AuthController {
     */
    async verifyRegistrationOTP(req: Request, res: Response): Promise<void> {
       try {
-         const device = validateDeviceContext(req.body.device);
+         const device = resolveDeviceContextForRegistrationVerify(req.body.device, req.body.type);
          const data: VerifyOTPRequest = { ...req.body, device };
          const result = await authService.verifyRegistrationOTP({
             ...data,

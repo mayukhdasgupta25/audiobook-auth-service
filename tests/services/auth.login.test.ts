@@ -1,0 +1,119 @@
+import { Role } from '@prisma/client';
+
+const mockPrisma = {
+   user: {
+      findUnique: jest.fn(),
+   },
+   refreshToken: {
+      create: jest.fn(),
+   },
+};
+
+jest.mock('@prisma/client', () => ({
+   PrismaClient: jest.fn(() => mockPrisma),
+   Role: { USER: 'USER', ADMIN: 'ADMIN', AUTHOR: 'AUTHOR' },
+   UserType: { USER: 'USER', AUTHOR: 'AUTHOR' },
+   OtpPurpose: { REGISTRATION: 'REGISTRATION' },
+}));
+
+jest.mock('../../src/utils/crypto', () => ({
+   PasswordUtils: {
+      hashPassword: jest.fn().mockResolvedValue('hashed-password'),
+      verifyPassword: jest.fn().mockResolvedValue(true),
+   },
+   TokenUtils: {
+      generateRefreshToken: jest.fn().mockReturnValue('refresh-token'),
+   },
+   JWTUtils: {
+      generateAccessToken: jest.fn().mockReturnValue('access-token'),
+   },
+}));
+
+jest.mock('../../src/services/userDevice', () => ({
+   userDeviceService: {
+      resolveDeviceForAuth: jest.fn().mockResolvedValue({ id: 'device-1' }),
+   },
+}));
+
+jest.mock('../../src/services/google-oauth', () => ({
+   googleOAuthService: {
+      verifyIdToken: jest.fn(),
+   },
+}));
+
+import { AuthService } from '../../src/services/auth';
+
+describe('AuthService login app access', () => {
+   let authService: AuthService;
+
+   const verifiedUser = {
+      id: 'user-1',
+      email: 'user@example.com',
+      password: 'hashed-password',
+      emailVerified: true,
+   };
+
+   beforeEach(() => {
+      jest.clearAllMocks();
+      authService = new AuthService();
+      mockPrisma.refreshToken.create.mockResolvedValue({});
+   });
+
+   test('should allow admin users for partner app', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({
+         ...verifiedUser,
+         role: Role.ADMIN,
+      });
+
+      await expect(
+         authService.login({
+            email: 'admin@example.com',
+            password: 'password123',
+            app: 'partner',
+            device: { deviceId: 'device-1' },
+         }),
+      ).resolves.toEqual(
+         expect.objectContaining({
+            accessToken: 'access-token',
+            refreshToken: 'refresh-token',
+         }),
+      );
+   });
+
+   test('should allow author users for partner app', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({
+         ...verifiedUser,
+         role: Role.AUTHOR,
+      });
+
+      await expect(
+         authService.login({
+            email: 'author@example.com',
+            password: 'password123',
+            app: 'partner',
+            device: { deviceId: 'device-1' },
+         }),
+      ).resolves.toEqual(
+         expect.objectContaining({
+            accessToken: 'access-token',
+         }),
+      );
+   });
+
+   test('should reject regular users for partner app', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({
+         ...verifiedUser,
+         role: Role.USER,
+      });
+
+      await expect(
+         authService.login({
+            email: 'user@example.com',
+            password: 'password123',
+            app: 'partner',
+            device: { deviceId: 'device-1' },
+         }),
+      ).rejects.toThrow('Access denied. Admin or author role required.');
+   });
+
+});

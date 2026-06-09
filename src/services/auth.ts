@@ -1,4 +1,4 @@
-import { PrismaClient, User, Role, OtpPurpose } from '@prisma/client';
+import { PrismaClient, User, Role, UserType, OtpPurpose } from '@prisma/client';
 import { PasswordUtils, TokenUtils } from '../utils/crypto';
 import { redisService } from './redis';
 import { rabbitmqService } from './rabbitmq';
@@ -38,7 +38,9 @@ export class AuthService {
     * Register a new user
     */
    async register(data: RegisterRequest): Promise<{ user: UserResponse; otpSent: boolean }> {
-      const { email, password, role } = data;
+      const { email, password, role, type = 'USER', firstName, lastName, address, contact } = data;
+      const userType = type === 'AUTHOR' ? UserType.AUTHOR : UserType.USER;
+      const userRole = type === 'AUTHOR' ? Role.AUTHOR : (role ?? Role.USER);
 
       // Check if user already exists
       const existingUser = await prisma.user.findUnique({
@@ -57,28 +59,34 @@ export class AuthService {
          data: {
             email: email.toLowerCase(),
             password: hashedPassword,
-            role: role ?? Role.USER,
+            role: userRole,
+            type: userType,
             emailVerified: false,
          },
       });
+
+      if (userType === UserType.AUTHOR) {
+         await redisService.setPendingAuthorRegistration(user.id, {
+            firstName: firstName!,
+            lastName: lastName!,
+            address: address!,
+            ...(contact !== undefined ? { contact } : {}),
+         });
+      }
 
       // Generate and send OTP for registration (RabbitMQ will be published after OTP verification)
       try {
          await otpService.createOTP(user.id, OtpPurpose.REGISTRATION, user.email);
       } catch (error) {
+         if (userType === UserType.AUTHOR) {
+            await redisService.deletePendingAuthorRegistration(user.id);
+         }
          appLogger.error({ err: error }, 'Failed to create OTP');
          throw new Error('Failed to send OTP. Please try again.');
       }
 
       return {
-         user: {
-            id: user.id,
-            email: user.email,
-            role: user.role,
-            emailVerified: user.emailVerified,
-            createdAt: user.createdAt,
-            updatedAt: user.updatedAt,
-         },
+         user: this.toUserResponse(user),
          otpSent: true,
       };
    }
@@ -116,12 +124,7 @@ export class AuthService {
          throw new Error('Email not verified. Please check your email for verification link.');
       }
 
-      // If app is "admin", verify user has ADMIN role
-      if (app === 'admin') {
-         if (user.role !== Role.ADMIN) {
-            throw new Error('Access denied. Admin role required.');
-         }
-      }
+      this.assertAppAccess(user, app);
 
       return this.issueAuthTokens(user, data.device, data.meta);
    }
@@ -155,12 +158,33 @@ export class AuthService {
 
       const authResponse = await this.issueAuthTokens(updatedUser, data.device, data.meta);
 
-      // Publish user created event to RabbitMQ after OTP verification
-      try {
-         await rabbitmqService.publishUserCreated(updatedUser.id, firstName, lastName);
-      } catch (error) {
-         appLogger.error({ err: error }, 'Failed to publish user created event');
-         // Don't fail if RabbitMQ publishing fails, OTP is already verified
+      if (updatedUser.type === UserType.AUTHOR) {
+         const pendingAuthor = await redisService.getPendingAuthorRegistration(updatedUser.id);
+         if (!pendingAuthor) {
+            throw new Error('Author registration data expired, please register again');
+         }
+
+         try {
+            await rabbitmqService.publishAuthorCreated({
+               userId: updatedUser.id,
+               firstName: pendingAuthor.firstName,
+               lastName: pendingAuthor.lastName,
+               address: pendingAuthor.address,
+               ...(pendingAuthor.contact !== undefined ? { contact: pendingAuthor.contact } : {}),
+            });
+         } catch (error) {
+            appLogger.error({ err: error }, 'Failed to publish author created event');
+         } finally {
+            await redisService.deletePendingAuthorRegistration(updatedUser.id);
+         }
+      } else {
+         // Publish user created event to RabbitMQ after OTP verification
+         try {
+            await rabbitmqService.publishUserCreated(updatedUser.id, firstName, lastName);
+         } catch (error) {
+            appLogger.error({ err: error }, 'Failed to publish user created event');
+            // Don't fail if RabbitMQ publishing fails, OTP is already verified
+         }
       }
 
       return authResponse;
@@ -560,12 +584,7 @@ export class AuthService {
             throw new Error('Email not verified. Please check your email for verification link.');
          }
 
-         // If app is "admin", verify user has ADMIN role
-         if (app === 'admin') {
-            if (user.role !== Role.ADMIN) {
-               throw new Error('Access denied. Admin role required.');
-            }
-         }
+         this.assertAppAccess(user, app);
       } else {
          // User doesn't exist - signup flow
          // Create new user with auto-verified email (Google already verified it)
@@ -617,6 +636,19 @@ export class AuthService {
          id: user.id,
          email: user.email,
          role: user.role,
+         type: user.type,
+         emailVerified: user.emailVerified,
+         createdAt: user.createdAt,
+         updatedAt: user.updatedAt,
+      };
+   }
+
+   private toUserResponse(user: User): UserResponse {
+      return {
+         id: user.id,
+         email: user.email,
+         role: user.role,
+         type: user.type,
          emailVerified: user.emailVerified,
          createdAt: user.createdAt,
          updatedAt: user.updatedAt,
@@ -624,19 +656,32 @@ export class AuthService {
    }
 
    /**
+    * Restrict login/OAuth by client app.
+    */
+   private assertAppAccess(user: User, app?: string): void {
+      if (app === 'partner') {
+         if (user.role !== Role.ADMIN && user.role !== Role.AUTHOR) {
+            throw new Error('Access denied. Admin or author role required.');
+         }
+      }
+   }
+
+   /**
     * Resolve device, issue access + refresh tokens, persist refresh token.
     */
    private async issueAuthTokens(
       user: User,
-      device: DeviceContext,
+      device?: DeviceContext,
       meta?: DeviceRequestMeta,
    ): Promise<AuthResponse> {
-      const userDevice = await userDeviceService.resolveDeviceForAuth(
-         user.id,
-         user.role,
-         device,
-         meta,
-      );
+      const userDevice = device
+         ? await userDeviceService.resolveDeviceForAuth(
+            user.id,
+            user.role,
+            device,
+            meta,
+         )
+         : null;
 
       const accessToken = this.generateAccessToken(user);
       const refreshToken = TokenUtils.generateRefreshToken();

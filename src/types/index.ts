@@ -1,4 +1,4 @@
-import { User, Role, OtpPurpose, EmailType } from '@prisma/client';
+import { User, Role, UserType, OtpPurpose, EmailType } from '@prisma/client';
 
 // JWT Payload interface
 export interface JWTPayload {
@@ -37,6 +37,26 @@ export interface RegisterRequest {
    email: string;
    password: string;
    role?: Role;
+   type?: 'USER' | 'AUTHOR';
+   firstName?: string;
+   lastName?: string;
+   address?: string;
+   contact?: string;
+}
+
+export interface PendingAuthorRegistration {
+   firstName: string;
+   lastName: string;
+   address: string;
+   contact?: string;
+}
+
+export interface AuthorCreatedEvent {
+   userId: string;
+   firstName: string;
+   lastName: string;
+   address: string;
+   contact?: string;
 }
 
 export interface DeviceContext {
@@ -102,6 +122,7 @@ export interface UserResponse {
    id: string;
    email: string;
    role: Role;
+   type: UserType;
    emailVerified: boolean;
    createdAt: Date;
    updatedAt: Date;
@@ -193,14 +214,15 @@ export interface PasswordResetData {
 }
 
 // OTP interfaces
-export { OtpPurpose, EmailType };
+export { OtpPurpose, EmailType, UserType };
 
 export interface VerifyOTPRequest {
    email: string;
    otp: string;
    firstName?: string;
    lastName?: string;
-   device: DeviceContext;
+   type?: string;
+   device?: DeviceContext;
 }
 
 export interface ResendOTPRequest {

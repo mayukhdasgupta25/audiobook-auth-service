@@ -13,6 +13,12 @@ datasource db {
 enum Role {
    USER
    ADMIN
+   AUTHOR
+}
+
+enum UserType {
+   USER
+   AUTHOR
 }
 
 enum OtpPurpose {
@@ -38,6 +44,7 @@ model User {
    password      String? // Hashed password (nullable for OAuth users)
    googleId      String?  @unique // Google OAuth ID
    role          Role     @default(USER)
+   type          UserType @default(USER)
    emailVerified Boolean  @default(false)
    createdAt     DateTime @default(now())
    updatedAt     DateTime @updatedAt

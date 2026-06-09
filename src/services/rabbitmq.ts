@@ -43,6 +43,13 @@ export class RabbitMQService {
             rabbitmqLogger.info({ exchange: config.RABBITMQ_EXCHANGE }, 'Exchange asserted');
          }
 
+         await this.channel.assertExchange(config.RABBITMQ_AUTHORS_EXCHANGE, 'topic', {
+            durable: true,
+         });
+         if (config.NODE_ENV !== 'test') {
+            rabbitmqLogger.info({ exchange: config.RABBITMQ_AUTHORS_EXCHANGE }, 'Authors exchange asserted');
+         }
+
          this.isConnected = true;
 
          // Handle connection close
@@ -112,6 +119,7 @@ export class RabbitMQService {
 
       try {
          await this.channel.checkExchange(config.RABBITMQ_EXCHANGE);
+         await this.channel.checkExchange(config.RABBITMQ_AUTHORS_EXCHANGE);
          return true;
       } catch {
          return false;
@@ -158,6 +166,66 @@ export class RabbitMQService {
       } catch (error) {
          if (config.NODE_ENV !== 'test') {
             rabbitmqLogger.error({ err: error, userId }, 'Error publishing user created event');
+         }
+         throw error;
+      }
+   }
+
+   /**
+    * Publish author created event
+    */
+   async publishAuthorCreated(data: {
+      userId: string;
+      firstName: string;
+      lastName: string;
+      address: string;
+      contact?: string;
+   }): Promise<void> {
+      if (!this.isServiceConnected()) {
+         throw new Error('RabbitMQ service is not connected');
+      }
+
+      try {
+         const messageData: {
+            userId: string;
+            firstName: string;
+            lastName: string;
+            address: string;
+            contact?: string;
+         } = {
+            userId: data.userId,
+            firstName: data.firstName,
+            lastName: data.lastName,
+            address: data.address,
+         };
+
+         if (data.contact !== undefined) {
+            messageData.contact = data.contact;
+         }
+
+         const message = JSON.stringify(messageData);
+         const routingKey = 'author.created';
+
+         const published = this.channel!.publish(
+            config.RABBITMQ_AUTHORS_EXCHANGE,
+            routingKey,
+            Buffer.from(message),
+            {
+               persistent: true,
+               timestamp: Date.now(),
+            }
+         );
+
+         if (!published) {
+            throw new Error('Failed to publish message to RabbitMQ');
+         }
+
+         if (config.NODE_ENV !== 'test') {
+            rabbitmqLogger.info({ userId: data.userId, routingKey }, 'Published author.created event');
+         }
+      } catch (error) {
+         if (config.NODE_ENV !== 'test') {
+            rabbitmqLogger.error({ err: error, userId: data.userId }, 'Error publishing author created event');
          }
          throw error;
       }

@@ -2,6 +2,29 @@ import { ValidationError } from '../types';
 import type { DeviceContext } from '../types';
 
 const DEVICE_ID_MAX_LENGTH = 128;
+const DEVICE_OPTIONAL_VERIFY_OTP_TYPES = new Set(['organization', 'author']);
+
+export function isDeviceOptionalForRegistrationVerifyType(type: unknown): boolean {
+   if (typeof type !== 'string') {
+      return false;
+   }
+
+   return DEVICE_OPTIONAL_VERIFY_OTP_TYPES.has(type.trim().toLowerCase());
+}
+
+export function resolveDeviceContextForRegistrationVerify(
+   device: unknown,
+   type: unknown,
+): DeviceContext | undefined {
+   if (isDeviceOptionalForRegistrationVerifyType(type)) {
+      if (device === undefined || device === null) {
+         return undefined;
+      }
+      return validateDeviceContext(device);
+   }
+
+   return validateDeviceContext(device);
+}
 
 export function validateDeviceContext(device: unknown): DeviceContext {
    if (!device || typeof device !== 'object' || Array.isArray(device)) {
