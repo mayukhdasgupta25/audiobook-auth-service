@@ -61,7 +61,7 @@
     "typescript",
     "express"
   ],
-  "author": "",
+  "author": "Srota",
   "license": "MIT",
   "dependencies": {
     "@prisma/client": "6.19.3",
