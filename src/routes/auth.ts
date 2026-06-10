@@ -11,6 +11,7 @@ import {
    generalRateLimit,
    validateCsrf,
 } from '../middleware';
+import { UploadMiddleware } from '../middleware/UploadMiddleware';
 
 const router = Router();
 
@@ -19,7 +20,12 @@ router.use(generalRateLimit);
 
 // Public routes
 router.get('/csrf-token', authController.getCsrfToken.bind(authController));
-router.post('/register', registerRateLimit, authController.register.bind(authController));
+router.post(
+   '/register',
+   registerRateLimit,
+   UploadMiddleware.handleRegistrationImageUpload,
+   authController.register.bind(authController),
+);
 router.post('/login', loginRateLimit, validateCsrf, authController.login.bind(authController));
 router.post('/verify-registration-otp', loginRateLimit, authController.verifyRegistrationOTP.bind(authController));
 router.post('/resend-otp', loginRateLimit, authController.resendOTP.bind(authController));

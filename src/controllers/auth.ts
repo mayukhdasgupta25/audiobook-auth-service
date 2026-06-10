@@ -30,6 +30,7 @@ import {
 } from '../utils/deviceValidation';
 import { validateRegisterRequest } from '../utils/registerValidation';
 import { getDeviceRequestMeta, handleAuthControllerError } from '../utils/authController';
+import { fileUrlService } from '../services/FileUrlService';
 import { generateCsrfToken, getCsrfCookieOptions } from '../utils/csrf';
 import { ValidationError } from '../types';
 
@@ -63,7 +64,30 @@ export class AuthController {
     */
    async register(req: Request, res: Response): Promise<void> {
       try {
-         const data = validateRegisterRequest(req.body as RegisterRequest);
+         const registerBody = { ...req.body } as RegisterRequest;
+
+         const avatarFile = (req as Request & { avatarFile?: Express.Multer.File }).avatarFile;
+         const profileImageFile = (req as Request & { profileImageFile?: Express.Multer.File }).profileImageFile;
+
+         if (avatarFile) {
+            registerBody.avatar = await fileUrlService.processUploadedImageFile(
+               avatarFile.path,
+               'uploads/images/users',
+               avatarFile.mimetype,
+               'avatar',
+            );
+         }
+
+         if (profileImageFile) {
+            registerBody.profileImage = await fileUrlService.processUploadedImageFile(
+               profileImageFile.path,
+               'uploads/images/authors',
+               profileImageFile.mimetype,
+               'profile',
+            );
+         }
+
+         const data = validateRegisterRequest(registerBody);
          const result = await authService.register(data);
 
          res.status(201).json({

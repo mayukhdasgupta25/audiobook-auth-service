@@ -2,7 +2,17 @@ import { Role } from '@prisma/client';
 import { RegisterRequest, ValidationError } from '../types';
 
 export function validateRegisterRequest(body: RegisterRequest): RegisterRequest {
-   const { email, password, type = 'USER', firstName, lastName, address, contact } = body;
+   const {
+      email,
+      password,
+      type = 'USER',
+      firstName,
+      lastName,
+      address,
+      contact,
+      avatar,
+      profileImage,
+   } = body;
 
    if (!email || typeof email !== 'string') {
       throw new ValidationError('Email is required', { email: ['Email is required'] });
@@ -35,7 +45,7 @@ export function validateRegisterRequest(body: RegisterRequest): RegisterRequest 
          throw new ValidationError('Author registration requires additional fields', details);
       }
 
-      return {
+      const normalized: RegisterRequest = {
          email,
          password,
          role: Role.AUTHOR,
@@ -47,12 +57,46 @@ export function validateRegisterRequest(body: RegisterRequest): RegisterRequest 
             ? { contact: String(contact).trim() }
             : {}),
       };
+
+      if (profileImage !== undefined && profileImage !== null && String(profileImage).trim().length > 0) {
+         normalized.profileImage = String(profileImage).trim();
+      }
+
+      return normalized;
    }
 
-   return {
+   const userDetails: Record<string, string[]> = {};
+
+   if (!address || typeof address !== 'string' || address.trim().length === 0) {
+      userDetails['address'] = ['Address is required for user registration'];
+   }
+
+   if (!contact || typeof contact !== 'string' || contact.trim().length === 0) {
+      userDetails['contact'] = ['Contact is required for user registration'];
+   }
+
+   if (Object.keys(userDetails).length > 0) {
+      throw new ValidationError('User registration requires additional fields', userDetails);
+   }
+
+   const normalizedUser: RegisterRequest = {
       email,
       password,
       role: body.role ?? Role.USER,
       type: 'USER',
+      address: address!.trim(),
+      contact: contact!.trim(),
    };
+
+   if (firstName !== undefined && firstName !== null && String(firstName).trim().length > 0) {
+      normalizedUser.firstName = String(firstName).trim();
+   }
+   if (lastName !== undefined && lastName !== null && String(lastName).trim().length > 0) {
+      normalizedUser.lastName = String(lastName).trim();
+   }
+   if (avatar !== undefined && avatar !== null && String(avatar).trim().length > 0) {
+      normalizedUser.avatar = String(avatar).trim();
+   }
+
+   return normalizedUser;
 }

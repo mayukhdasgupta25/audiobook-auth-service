@@ -25,6 +25,12 @@ jest.mock('../../src/services/redis', () => ({
    },
 }));
 
+jest.mock('../../src/services/FileUrlService', () => ({
+   fileUrlService: {
+      processUploadedImageFile: jest.fn().mockResolvedValue('uploads/images/users/avatar-1.jpg'),
+   },
+}));
+
 jest.mock('../../src/utils/crypto', () => ({
    JWTUtils: {
       decodeToken: jest.fn(),
@@ -99,7 +105,12 @@ describe('AuthController', () => {
             otpSent: true,
          });
 
-         mockRequest.body = { email: 'test@example.com', password: 'password123' };
+         mockRequest.body = {
+            email: 'test@example.com',
+            password: 'password123',
+            address: '456 Oak Ave',
+            contact: '+1-555-0200',
+         };
 
          await authController.register(mockRequest as Request, mockResponse as Response);
 
@@ -108,6 +119,8 @@ describe('AuthController', () => {
             password: 'password123',
             role: 'USER',
             type: 'USER',
+            address: '456 Oak Ave',
+            contact: '+1-555-0200',
          });
          expect(mockStatus).toHaveBeenCalledWith(201);
          expect(mockJson).toHaveBeenCalledWith({
@@ -142,7 +155,12 @@ describe('AuthController', () => {
             new Error('User with this email already exists')
          );
 
-         mockRequest.body = { email: 'existing@example.com', password: 'password123' };
+         mockRequest.body = {
+            email: 'existing@example.com',
+            password: 'password123',
+            address: '456 Oak Ave',
+            contact: '+1-555-0200',
+         };
 
          await authController.register(mockRequest as Request, mockResponse as Response);
 
@@ -155,7 +173,12 @@ describe('AuthController', () => {
       test('should handle generic registration errors', async () => {
          (authService.register as jest.Mock).mockRejectedValue(new Error('Database error'));
 
-         mockRequest.body = { email: 'test@example.com', password: 'password123' };
+         mockRequest.body = {
+            email: 'test@example.com',
+            password: 'password123',
+            address: '456 Oak Ave',
+            contact: '+1-555-0200',
+         };
 
          await authController.register(mockRequest as Request, mockResponse as Response);
 
