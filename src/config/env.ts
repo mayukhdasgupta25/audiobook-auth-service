@@ -143,6 +143,7 @@ export const config = {
 
    MAX_FILE_SIZE: requireIntEnv("MAX_FILE_SIZE"),
    DEV_UPLOAD_DIR: nodeEnv === "development" ? "./src/uploads" : "./uploads",
+   DEV_USER_AVATAR_DIR: nodeEnv === "development" ? "./src/uploads/images/users" : "./uploads/images/users",
    DEV_AUTHOR_IMAGE_DIR: nodeEnv === "development" ? "./src/uploads/images/authors" : "./uploads/images/authors",
 
    AWS_S3_BUCKET: requireEnv("AWS_S3_BUCKET"),

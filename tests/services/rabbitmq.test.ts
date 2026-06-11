@@ -131,15 +131,19 @@ describe('RabbitMQService', () => {
       });
 
       test('should publish user created event', async () => {
-         const userId = 'user-123';
+         const data = {
+            userId: 'user-123',
+            address: '456 Oak Ave',
+            contact: '+1-555-0200',
+         };
          mockChannel.publish.mockReturnValueOnce(true);
 
-         await rabbitmqService.publishUserCreated(userId);
+         await rabbitmqService.publishUserCreated(data);
 
          expect(mockChannel.publish).toHaveBeenCalledWith(
             config.RABBITMQ_EXCHANGE,
             'user.created',
-            Buffer.from(JSON.stringify({ userId })),
+            Buffer.from(JSON.stringify(data)),
             expect.objectContaining({
                persistent: true,
                timestamp: expect.any(Number),
@@ -147,18 +151,23 @@ describe('RabbitMQService', () => {
          );
       });
 
-      test('should publish user created event with firstName and lastName', async () => {
-         const userId = 'user-123';
-         const firstName = 'John';
-         const lastName = 'Doe Smith';
+      test('should publish user created event with profile fields', async () => {
+         const data = {
+            userId: 'user-123',
+            firstName: 'John',
+            lastName: 'Doe Smith',
+            address: '456 Oak Ave',
+            contact: '+1-555-0200',
+            avatar: 'uploads/images/users/avatar-1.jpg',
+         };
          mockChannel.publish.mockReturnValueOnce(true);
 
-         await rabbitmqService.publishUserCreated(userId, firstName, lastName);
+         await rabbitmqService.publishUserCreated(data);
 
          expect(mockChannel.publish).toHaveBeenCalledWith(
             config.RABBITMQ_EXCHANGE,
             'user.created',
-            Buffer.from(JSON.stringify({ userId, firstName, lastName })),
+            Buffer.from(JSON.stringify(data)),
             expect.objectContaining({
                persistent: true,
                timestamp: expect.any(Number),
@@ -231,20 +240,27 @@ describe('RabbitMQService', () => {
       });
 
       test('should throw error if publish fails', async () => {
-         const userId = 'user-123';
          mockChannel.publish.mockReturnValueOnce(false);
 
-         await expect(rabbitmqService.publishUserCreated(userId)).rejects.toThrow(
-            'Failed to publish message to RabbitMQ'
-         );
+         await expect(
+            rabbitmqService.publishUserCreated({
+               userId: 'user-123',
+               address: '456 Oak Ave',
+               contact: '+1-555-0200',
+            }),
+         ).rejects.toThrow('Failed to publish message to RabbitMQ');
       });
 
       test('should throw error if not connected when publishing', async () => {
          (rabbitmqService as any).isConnected = false;
 
-         await expect(rabbitmqService.publishUserCreated('user-123')).rejects.toThrow(
-            'RabbitMQ service is not connected'
-         );
+         await expect(
+            rabbitmqService.publishUserCreated({
+               userId: 'user-123',
+               address: '456 Oak Ave',
+               contact: '+1-555-0200',
+            }),
+         ).rejects.toThrow('RabbitMQ service is not connected');
       });
    });
 });

@@ -44,6 +44,13 @@ export interface RegisterRequest {
    address?: string;
    contact?: string;
    profileImage?: string;
+   avatar?: string;
+}
+
+export interface PendingUserRegistration {
+   address: string;
+   contact: string;
+   avatar?: string;
 }
 
 export interface PendingAuthorRegistration {
@@ -52,6 +59,15 @@ export interface PendingAuthorRegistration {
    address: string;
    contact?: string;
    profileImage?: string;
+}
+
+export interface UserCreatedEvent {
+   userId: string;
+   firstName?: string;
+   lastName?: string;
+   address?: string;
+   contact?: string;
+   avatar?: string;
 }
 
 export interface AuthorCreatedEvent {

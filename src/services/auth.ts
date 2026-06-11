@@ -38,7 +38,18 @@ export class AuthService {
     * Register a new user
     */
    async register(data: RegisterRequest): Promise<{ user: UserResponse; otpSent: boolean }> {
-      const { email, password, role, type = 'USER', firstName, lastName, address, contact, profileImage } = data;
+      const {
+         email,
+         password,
+         role,
+         type = 'USER',
+         firstName,
+         lastName,
+         address,
+         contact,
+         avatar,
+         profileImage,
+      } = data;
       const userType = type === 'AUTHOR' ? UserType.AUTHOR : UserType.USER;
       const userRole = type === 'AUTHOR' ? Role.AUTHOR : (role ?? Role.USER);
 
@@ -72,6 +83,13 @@ export class AuthService {
             address: address!,
             ...(contact !== undefined ? { contact } : {}),
             ...(profileImage !== undefined ? { profileImage } : {}),
+            ...(profileImage !== undefined ? { profileImage } : {}),
+         });
+      } else {
+         await redisService.setPendingUserRegistration(user.id, {
+            address: address!,
+            contact: contact!,
+            ...(avatar !== undefined ? { avatar } : {}),
          });
       }
 
@@ -81,6 +99,8 @@ export class AuthService {
       } catch (error) {
          if (userType === UserType.AUTHOR) {
             await redisService.deletePendingAuthorRegistration(user.id);
+         } else {
+            await redisService.deletePendingUserRegistration(user.id);
          }
          appLogger.error({ err: error }, 'Failed to create OTP');
          throw new Error('Failed to send OTP. Please try again.');
@@ -180,12 +200,24 @@ export class AuthService {
             await redisService.deletePendingAuthorRegistration(updatedUser.id);
          }
       } else {
-         // Publish user created event to RabbitMQ after OTP verification
+         const pendingUser = await redisService.getPendingUserRegistration(updatedUser.id);
+         if (!pendingUser) {
+            throw new Error('User registration data expired, please register again');
+         }
+
          try {
-            await rabbitmqService.publishUserCreated(updatedUser.id, firstName, lastName);
+            await rabbitmqService.publishUserCreated({
+               userId: updatedUser.id,
+               address: pendingUser.address,
+               contact: pendingUser.contact,
+               ...(firstName !== undefined && firstName.trim().length > 0 ? { firstName: firstName.trim() } : {}),
+               ...(lastName !== undefined && lastName.trim().length > 0 ? { lastName: lastName.trim() } : {}),
+               ...(pendingUser.avatar !== undefined ? { avatar: pendingUser.avatar } : {}),
+            });
          } catch (error) {
             appLogger.error({ err: error }, 'Failed to publish user created event');
-            // Don't fail if RabbitMQ publishing fails, OTP is already verified
+         } finally {
+            await redisService.deletePendingUserRegistration(updatedUser.id);
          }
       }
 
@@ -610,9 +642,13 @@ export class AuthService {
             lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : undefined;
          }
 
-         // Publish user created event to RabbitMQ with firstName and lastName
+         // Publish user created event to RabbitMQ with firstName and lastName (OAuth users may complete profile later)
          try {
-            await rabbitmqService.publishUserCreated(user.id, firstName, lastName);
+            await rabbitmqService.publishUserCreated({
+               userId: user.id,
+               ...(firstName !== undefined ? { firstName } : {}),
+               ...(lastName !== undefined ? { lastName } : {}),
+            });
          } catch (error) {
             appLogger.error({ err: error }, 'Failed to publish user created event');
             // Don't fail registration if RabbitMQ publishing fails

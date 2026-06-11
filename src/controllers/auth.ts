@@ -64,11 +64,20 @@ export class AuthController {
     */
    async register(req: Request, res: Response): Promise<void> {
       try {
-         const contentType = req.headers['content-type'] ?? '';
-         const isMultipart = contentType.startsWith('multipart/form-data');
          const registerBody = { ...req.body } as RegisterRequest;
 
+         const avatarFile = (req as Request & { avatarFile?: Express.Multer.File }).avatarFile;
          const profileImageFile = (req as Request & { profileImageFile?: Express.Multer.File }).profileImageFile;
+
+         if (avatarFile) {
+            registerBody.avatar = await fileUrlService.processUploadedImageFile(
+               avatarFile.path,
+               'uploads/images/users',
+               avatarFile.mimetype,
+               'avatar',
+            );
+         }
+
          if (profileImageFile) {
             registerBody.profileImage = await fileUrlService.processUploadedImageFile(
                profileImageFile.path,
@@ -78,6 +87,8 @@ export class AuthController {
             );
          }
 
+         const contentType = req.headers['content-type'] ?? '';
+         const isMultipart = contentType.startsWith('multipart/form-data');
          const data = validateRegisterRequest(registerBody, { isMultipart });
          const result = await authService.register(data);
 

@@ -4,7 +4,9 @@ import { config } from '../config/env';
 import { getFileUrl } from '../middleware/RegisterUploadMiddleware';
 import { StorageFactory } from './storage/StorageFactory';
 
-export type ImageKeyDirectory = 'uploads/images/authors';
+export type ImageKeyDirectory =
+   | 'uploads/images/users'
+   | 'uploads/images/authors';
 
 export class FileUrlService {
    shouldSignUrls(): boolean {

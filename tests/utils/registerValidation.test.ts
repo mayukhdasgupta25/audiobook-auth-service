@@ -10,6 +10,8 @@ describe('validateRegisterRequest', () => {
          email: 'user@example.com',
          password: VALID_PASSWORD,
          confirmPassword: VALID_PASSWORD,
+         address: '456 Oak Ave',
+         contact: '+1-555-0200',
       });
 
       expect(result).toEqual({
@@ -17,7 +19,18 @@ describe('validateRegisterRequest', () => {
          password: VALID_PASSWORD,
          role: Role.USER,
          type: 'USER',
+         address: '456 Oak Ave',
+         contact: '+1-555-0200',
       });
+   });
+
+   test('should reject user registration without address and contact', () => {
+      expect(() =>
+         validateRegisterRequest({
+            email: 'user@example.com',
+            password: 'password123',
+         }),
+      ).toThrow(ValidationError);
    });
 
    test('should validate and normalize author registration from multipart', () => {

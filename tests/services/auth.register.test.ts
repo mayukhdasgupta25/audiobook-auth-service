@@ -38,6 +38,9 @@ jest.mock('../../src/services/redis', () => ({
       setPendingAuthorRegistration: jest.fn().mockResolvedValue(undefined),
       getPendingAuthorRegistration: jest.fn(),
       deletePendingAuthorRegistration: jest.fn().mockResolvedValue(undefined),
+      setPendingUserRegistration: jest.fn().mockResolvedValue(undefined),
+      getPendingUserRegistration: jest.fn(),
+      deletePendingUserRegistration: jest.fn().mockResolvedValue(undefined),
    },
 }));
 
@@ -100,6 +103,7 @@ describe('AuthService register/verify author flow', () => {
          lastName: 'Doe',
          address: '123 Main St',
          contact: '+1-555-0100',
+         profileImage: 'uploads/images/authors/image-1.jpg',
       });
 
       expect(redisService.setPendingAuthorRegistration).toHaveBeenCalledWith('author-user-1', {
@@ -237,6 +241,12 @@ describe('AuthService register/verify author flow', () => {
       });
       mockPrisma.refreshToken.create.mockResolvedValue({});
 
+      (redisService.getPendingUserRegistration as jest.Mock).mockResolvedValue({
+         address: '456 Oak Ave',
+         contact: '+1-555-0200',
+         avatar: 'uploads/images/users/avatar-1.jpg',
+      });
+
       await authService.verifyRegistrationOTP({
          email: 'user@example.com',
          otp: '123456',
@@ -245,7 +255,15 @@ describe('AuthService register/verify author flow', () => {
          device: { deviceId: 'device-1' },
       });
 
-      expect(rabbitmqService.publishUserCreated).toHaveBeenCalledWith('user-1', 'John', 'Doe');
+      expect(rabbitmqService.publishUserCreated).toHaveBeenCalledWith({
+         userId: 'user-1',
+         firstName: 'John',
+         lastName: 'Doe',
+         address: '456 Oak Ave',
+         contact: '+1-555-0200',
+         avatar: 'uploads/images/users/avatar-1.jpg',
+      });
       expect(rabbitmqService.publishAuthorCreated).not.toHaveBeenCalled();
+      expect(redisService.deletePendingUserRegistration).toHaveBeenCalledWith('user-1');
    });
 });

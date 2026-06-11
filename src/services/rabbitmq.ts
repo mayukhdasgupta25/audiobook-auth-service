@@ -129,20 +129,46 @@ export class RabbitMQService {
    /**
     * Publish user created event
     */
-   async publishUserCreated(userId: string, firstName?: string, lastName?: string): Promise<void> {
+   async publishUserCreated(data: {
+      userId: string;
+      firstName?: string;
+      lastName?: string;
+      address?: string;
+      contact?: string;
+      avatar?: string;
+   }): Promise<void> {
       if (!this.isServiceConnected()) {
          throw new Error('RabbitMQ service is not connected');
       }
 
       try {
-         // Build message object, only including firstName and lastName if provided
-         const messageData: { userId: string; firstName?: string; lastName?: string } = { userId };
-         if (firstName !== undefined) {
-            messageData.firstName = firstName;
+         const messageData: {
+            userId: string;
+            firstName?: string;
+            lastName?: string;
+            address?: string;
+            contact?: string;
+            avatar?: string;
+         } = {
+            userId: data.userId,
+         };
+
+         if (data.firstName !== undefined) {
+            messageData.firstName = data.firstName;
          }
-         if (lastName !== undefined) {
-            messageData.lastName = lastName;
+         if (data.lastName !== undefined) {
+            messageData.lastName = data.lastName;
          }
+         if (data.address !== undefined) {
+            messageData.address = data.address;
+         }
+         if (data.contact !== undefined) {
+            messageData.contact = data.contact;
+         }
+         if (data.avatar !== undefined) {
+            messageData.avatar = data.avatar;
+         }
+
          const message = JSON.stringify(messageData);
          const routingKey = 'user.created';
 
@@ -161,11 +187,11 @@ export class RabbitMQService {
          }
 
          if (config.NODE_ENV !== 'test') {
-            rabbitmqLogger.info({ userId, routingKey }, 'Published user.created event');
+            rabbitmqLogger.info({ userId: data.userId, routingKey }, 'Published user.created event');
          }
       } catch (error) {
          if (config.NODE_ENV !== 'test') {
-            rabbitmqLogger.error({ err: error, userId }, 'Error publishing user created event');
+            rabbitmqLogger.error({ err: error, userId: data.userId }, 'Error publishing user created event');
          }
          throw error;
       }
