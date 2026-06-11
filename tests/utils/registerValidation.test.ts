@@ -11,7 +11,7 @@ describe('validateRegisterRequest', () => {
          password: VALID_PASSWORD,
          confirmPassword: VALID_PASSWORD,
          address: '456 Oak Ave',
-         contact: '+1-555-0200',
+         contact: '9876543210',
       });
 
       expect(result).toEqual({
@@ -20,7 +20,7 @@ describe('validateRegisterRequest', () => {
          role: Role.USER,
          type: 'USER',
          address: '456 Oak Ave',
-         contact: '+1-555-0200',
+         contact: '+919876543210',
       });
    });
 
@@ -43,7 +43,7 @@ describe('validateRegisterRequest', () => {
             firstName: 'Jane',
             lastName: 'Doe',
             address: '123 Main St',
-            contact: '+1-555-0100',
+            contact: '9876543210',
             profileImage: '/uploads/images/authors/image-1.jpg',
          },
          { isMultipart: true },
@@ -57,7 +57,7 @@ describe('validateRegisterRequest', () => {
          firstName: 'Jane',
          lastName: 'Doe',
          address: '123 Main St',
-         contact: '+1-555-0100',
+         contact: '+919876543210',
          profileImage: '/uploads/images/authors/image-1.jpg',
       });
    });
@@ -172,6 +172,48 @@ describe('validateRegisterRequest', () => {
       } catch (error) {
          expect(error).toBeInstanceOf(ValidationError);
          expect((error as ValidationError).details['confirmPassword']).toContain('Confirm password is required');
+      }
+   });
+
+   test('should reject invalid Indian contact for user registration', () => {
+      try {
+         validateRegisterRequest({
+            email: 'user@example.com',
+            password: VALID_PASSWORD,
+            confirmPassword: VALID_PASSWORD,
+            address: '456 Oak Ave',
+            contact: '+1-555-0200',
+         });
+         fail('Expected ValidationError');
+      } catch (error) {
+         expect(error).toBeInstanceOf(ValidationError);
+         expect((error as ValidationError).details['contact']).toContain(
+            'Contact must be a valid Indian phone number',
+         );
+      }
+   });
+
+   test('should reject invalid Indian contact for author registration', () => {
+      try {
+         validateRegisterRequest(
+            {
+               type: 'AUTHOR',
+               email: 'author@example.com',
+               password: VALID_PASSWORD,
+               confirmPassword: VALID_PASSWORD,
+               firstName: 'Jane',
+               lastName: 'Doe',
+               address: '123 Main St',
+               contact: '12345',
+            },
+            { isMultipart: true },
+         );
+         fail('Expected ValidationError');
+      } catch (error) {
+         expect(error).toBeInstanceOf(ValidationError);
+         expect((error as ValidationError).details['contact']).toContain(
+            'Contact must be a valid Indian phone number',
+         );
       }
    });
 

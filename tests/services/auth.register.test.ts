@@ -102,14 +102,14 @@ describe('AuthService register/verify author flow', () => {
          firstName: 'Jane',
          lastName: 'Doe',
          address: '123 Main St',
-         contact: '+1-555-0100',
+         contact: '+919876543210',
       });
 
       expect(redisService.setPendingAuthorRegistration).toHaveBeenCalledWith('author-user-1', {
          firstName: 'Jane',
          lastName: 'Doe',
          address: '123 Main St',
-         contact: '+1-555-0100',
+         contact: '+919876543210',
       });
    });
 
@@ -164,7 +164,7 @@ describe('AuthService register/verify author flow', () => {
          firstName: 'Jane',
          lastName: 'Doe',
          address: '123 Main St',
-         contact: '+1-555-0100',
+         contact: '+919876543210',
          profileImage: '/uploads/images/authors/image-1.jpg',
       });
 
@@ -179,7 +179,7 @@ describe('AuthService register/verify author flow', () => {
          firstName: 'Jane',
          lastName: 'Doe',
          address: '123 Main St',
-         contact: '+1-555-0100',
+         contact: '+919876543210',
          profileImage: '/uploads/images/authors/image-1.jpg',
       });
       expect(rabbitmqService.publishUserCreated).not.toHaveBeenCalled();
@@ -242,7 +242,7 @@ describe('AuthService register/verify author flow', () => {
 
       (redisService.getPendingUserRegistration as jest.Mock).mockResolvedValue({
          address: '456 Oak Ave',
-         contact: '+1-555-0200',
+         contact: '+919123456789',
          avatar: 'uploads/images/users/avatar-1.jpg',
       });
 
@@ -259,7 +259,7 @@ describe('AuthService register/verify author flow', () => {
          firstName: 'John',
          lastName: 'Doe',
          address: '456 Oak Ave',
-         contact: '+1-555-0200',
+         contact: '+919123456789',
          avatar: 'uploads/images/users/avatar-1.jpg',
       });
       expect(rabbitmqService.publishAuthorCreated).not.toHaveBeenCalled();

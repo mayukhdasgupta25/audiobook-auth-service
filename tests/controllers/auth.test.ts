@@ -113,7 +113,7 @@ describe('AuthController', () => {
             password: validPassword,
             confirmPassword: validPassword,
             address: '456 Oak Ave',
-            contact: '+1-555-0200',
+            contact: '+919123456789',
          };
 
          await authController.register(mockRequest as Request, mockResponse as Response);
@@ -124,7 +124,7 @@ describe('AuthController', () => {
             role: 'USER',
             type: 'USER',
             address: '456 Oak Ave',
-            contact: '+1-555-0200',
+            contact: '+919123456789',
          });
          expect(mockStatus).toHaveBeenCalledWith(201);
          expect(mockJson).toHaveBeenCalledWith({
@@ -210,7 +210,7 @@ describe('AuthController', () => {
             password: validPassword,
             confirmPassword: validPassword,
             address: '456 Oak Ave',
-            contact: '+1-555-0200',
+            contact: '+919123456789',
          };
 
          await authController.register(mockRequest as Request, mockResponse as Response);
@@ -229,7 +229,7 @@ describe('AuthController', () => {
             password: validPassword,
             confirmPassword: validPassword,
             address: '456 Oak Ave',
-            contact: '+1-555-0200',
+            contact: '+919123456789',
          };
 
          await authController.register(mockRequest as Request, mockResponse as Response);
