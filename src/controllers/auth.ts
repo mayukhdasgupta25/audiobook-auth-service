@@ -6,6 +6,7 @@ import { redisService } from '../services/redis';
 import { otpService } from '../services/otp';
 import { JWTUtils } from '../utils/crypto';
 import { OtpPurpose } from '@prisma/client';
+import { ClientType } from '../constants/clientType';
 import {
    RegisterRequest,
    LoginRequest,
@@ -113,7 +114,7 @@ export class AuthController {
          const result = await authService.login({ ...data, meta: getDeviceRequestMeta(req) });
 
          // Set refresh token as httpOnly cookie for browser clients
-         if (data.clientType === 'browser' && result.refreshToken) {
+         if (data.clientType === ClientType.BROWSER && result.refreshToken) {
             res.cookie('refreshToken', result.refreshToken, getRefreshTokenCookieOptions());
 
             // Remove refresh token from response body for browser clients
@@ -231,7 +232,7 @@ export class AuthController {
          const result = await authService.googleOAuth({ ...data, meta: getDeviceRequestMeta(req) });
 
          // Set refresh token as httpOnly cookie for browser clients
-         if (data.clientType === 'browser' && result.refreshToken) {
+         if (data.clientType === ClientType.BROWSER && result.refreshToken) {
             res.cookie('refreshToken', result.refreshToken, getRefreshTokenCookieOptions());
 
             // Remove refresh token from response body for browser clients

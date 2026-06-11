@@ -1,5 +1,6 @@
 import { Role } from '@prisma/client';
 import { RegisterRequest, ValidationError } from '../types';
+import { RegisterAccountType } from '../constants/registerAccountType';
 import { validateRegistrationPassword } from './passwordValidation';
 import { validateIndianContact } from './phoneValidation';
 
@@ -39,7 +40,7 @@ export function validateRegisterRequest(
    const {
       email,
       password,
-      type = 'USER',
+      type = RegisterAccountType.USER,
       firstName,
       lastName,
       address,
@@ -61,23 +62,23 @@ export function validateRegisterRequest(
       throw new ValidationError('Invalid password', passwordValidationErrors);
    }
 
-   if (type !== 'USER' && type !== 'AUTHOR') {
+   if (type !== RegisterAccountType.USER && type !== RegisterAccountType.AUTHOR) {
       throw new ValidationError('Invalid user type', { type: ['Type must be USER or AUTHOR'] });
    }
 
-   if (isMultipart && type !== 'AUTHOR') {
+   if (isMultipart && type !== RegisterAccountType.AUTHOR) {
       throw new ValidationError('User registration requires application/json', {
          type: ['USER registration must use application/json, not multipart/form-data'],
       });
    }
 
-   if (!isMultipart && type === 'AUTHOR') {
+   if (!isMultipart && type === RegisterAccountType.AUTHOR) {
       throw new ValidationError('Author registration requires multipart/form-data', {
          type: ['AUTHOR registration must use multipart/form-data with type=AUTHOR'],
       });
    }
 
-   if (type === 'AUTHOR') {
+   if (type === RegisterAccountType.AUTHOR) {
       const details: Record<string, string[]> = {};
 
       if (!firstName || typeof firstName !== 'string' || firstName.trim().length === 0) {
@@ -105,7 +106,7 @@ export function validateRegisterRequest(
          email,
          password,
          role: Role.AUTHOR,
-         type: 'AUTHOR',
+         type: RegisterAccountType.AUTHOR,
          firstName: firstName!.trim(),
          lastName: lastName!.trim(),
          address: address!.trim(),
@@ -138,7 +139,7 @@ export function validateRegisterRequest(
       email,
       password,
       role: body.role ?? Role.USER,
-      type: 'USER',
+      type: RegisterAccountType.USER,
       address: address!.trim(),
       contact: normalizedContact!,
    };

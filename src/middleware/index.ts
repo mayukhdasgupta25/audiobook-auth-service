@@ -6,6 +6,7 @@ import { redisService } from '../services/redis';
 import { config } from '../config/env';
 import { AuthError, ValidationError } from '../types';
 import { SubscriptionError } from '../types/subscription';
+import { AuthRoleGroups } from '../constants/authRoles';
 
 export { validateCsrf, requiresCsrfProtection } from './csrf';
 
@@ -80,7 +81,7 @@ export const requireRole = (roles: string[]) => {
 /**
  * Admin only middleware
  */
-export const requireAdmin = requireRole(['ADMIN']);
+export const requireAdmin = requireRole([...AuthRoleGroups.ADMIN_ONLY]);
 
 /**
  * Rate limiting middleware for login attempts

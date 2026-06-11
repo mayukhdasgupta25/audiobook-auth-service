@@ -6,6 +6,9 @@ import { googleOAuthService } from './google-oauth';
 import { otpService } from './otp';
 import { userDeviceService } from './userDevice';
 import { appLogger } from '../utils/logger';
+import { ClientType } from '../constants/clientType';
+import { OAuthClientApp } from '../constants/oauthClientApp';
+import { RegisterAccountType } from '../constants/registerAccountType';
 import {
    RegisterRequest,
    LoginRequest,
@@ -42,7 +45,7 @@ export class AuthService {
          email,
          password,
          role,
-         type = 'USER',
+         type = RegisterAccountType.USER,
          firstName,
          lastName,
          address,
@@ -50,8 +53,8 @@ export class AuthService {
          avatar,
          profileImage,
       } = data;
-      const userType = type === 'AUTHOR' ? UserType.AUTHOR : UserType.USER;
-      const userRole = type === 'AUTHOR' ? Role.AUTHOR : (role ?? Role.USER);
+      const userType = type === RegisterAccountType.AUTHOR ? UserType.AUTHOR : UserType.USER;
+      const userRole = type === RegisterAccountType.AUTHOR ? Role.AUTHOR : (role ?? Role.USER);
 
       // Check if user already exists
       const existingUser = await prisma.user.findUnique({
@@ -239,7 +242,7 @@ export class AuthService {
       const loginData: LoginRequest & { meta?: DeviceRequestMeta } = {
          email,
          password,
-         clientType: 'mobile',
+         clientType: ClientType.MOBILE,
          device: data.device,
       };
       if (data.meta) {
@@ -697,7 +700,7 @@ export class AuthService {
     * Restrict login/OAuth by client app.
     */
    private assertAppAccess(user: User, app?: string): void {
-      if (app === 'partner') {
+      if (app === OAuthClientApp.PARTNER) {
          if (user.role !== Role.ADMIN && user.role !== Role.AUTHOR) {
             throw new Error('Access denied. Admin or author role required.');
          }
