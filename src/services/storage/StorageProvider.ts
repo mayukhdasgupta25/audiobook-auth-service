@@ -1,12 +1,16 @@
 export interface StorageProvider {
    uploadFile(
-      filePath: string,
-      fileContent: Buffer,
-      contentType?: string,
-      metadata?: Record<string, string>
+      key: string,
+      buffer: Buffer,
+      contentType: string,
+      metadata?: Record<string, string>,
    ): Promise<string>;
 
-   getFileUrl(filePath: string, expiresIn?: number): Promise<string>;
+   getFileUrl(key: string, expiresIn?: number): Promise<string>;
+
+   deleteFile(key: string): Promise<boolean>;
+
+   fileExists(key: string): Promise<boolean>;
 }
 
 export interface StorageConfig {

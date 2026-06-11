@@ -97,13 +97,12 @@ describe('AuthService register/verify author flow', () => {
 
       await authService.register({
          email: 'author@example.com',
-         password: 'password123',
+         password: 'Password1!',
          type: 'AUTHOR',
          firstName: 'Jane',
          lastName: 'Doe',
          address: '123 Main St',
          contact: '+1-555-0100',
-         profileImage: 'uploads/images/authors/image-1.jpg',
       });
 
       expect(redisService.setPendingAuthorRegistration).toHaveBeenCalledWith('author-user-1', {
@@ -111,35 +110,36 @@ describe('AuthService register/verify author flow', () => {
          lastName: 'Doe',
          address: '123 Main St',
          contact: '+1-555-0100',
-         profileImage: 'uploads/images/authors/image-1.jpg',
       });
    });
 
-   test('should store pending user metadata on user registration', async () => {
+   test('should store profileImage in pending author metadata when provided', async () => {
       mockPrisma.user.findUnique.mockResolvedValue(null);
       mockPrisma.user.create.mockResolvedValue({
-         id: 'user-1',
-         email: 'user@example.com',
+         id: 'author-user-1',
+         email: 'author@example.com',
          role: Role.USER,
-         type: UserType.USER,
+         type: UserType.AUTHOR,
          emailVerified: false,
          createdAt: new Date(),
          updatedAt: new Date(),
       });
 
       await authService.register({
-         email: 'user@example.com',
-         password: 'password123',
-         type: 'USER',
-         address: '456 Oak Ave',
-         contact: '+1-555-0200',
-         avatar: 'uploads/images/users/avatar-1.jpg',
+         email: 'author@example.com',
+         password: 'Password1!',
+         type: 'AUTHOR',
+         firstName: 'Jane',
+         lastName: 'Doe',
+         address: '123 Main St',
+         profileImage: '/uploads/images/authors/image-1.jpg',
       });
 
-      expect(redisService.setPendingUserRegistration).toHaveBeenCalledWith('user-1', {
-         address: '456 Oak Ave',
-         contact: '+1-555-0200',
-         avatar: 'uploads/images/users/avatar-1.jpg',
+      expect(redisService.setPendingAuthorRegistration).toHaveBeenCalledWith('author-user-1', {
+         firstName: 'Jane',
+         lastName: 'Doe',
+         address: '123 Main St',
+         profileImage: '/uploads/images/authors/image-1.jpg',
       });
    });
 
@@ -165,7 +165,7 @@ describe('AuthService register/verify author flow', () => {
          lastName: 'Doe',
          address: '123 Main St',
          contact: '+1-555-0100',
-         profileImage: 'uploads/images/authors/image-1.jpg',
+         profileImage: '/uploads/images/authors/image-1.jpg',
       });
 
       await authService.verifyRegistrationOTP({
@@ -180,7 +180,7 @@ describe('AuthService register/verify author flow', () => {
          lastName: 'Doe',
          address: '123 Main St',
          contact: '+1-555-0100',
-         profileImage: 'uploads/images/authors/image-1.jpg',
+         profileImage: '/uploads/images/authors/image-1.jpg',
       });
       expect(rabbitmqService.publishUserCreated).not.toHaveBeenCalled();
       expect(redisService.deletePendingAuthorRegistration).toHaveBeenCalledWith('author-user-1');

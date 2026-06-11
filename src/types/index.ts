@@ -36,14 +36,15 @@ export interface JWKS {
 export interface RegisterRequest {
    email: string;
    password: string;
+   confirmPassword?: string;
    role?: Role;
    type?: 'USER' | 'AUTHOR';
    firstName?: string;
    lastName?: string;
    address?: string;
    contact?: string;
-   avatar?: string;
    profileImage?: string;
+   avatar?: string;
 }
 
 export interface PendingUserRegistration {

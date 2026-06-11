@@ -45,6 +45,13 @@ process.env['AWS_S3_BUCKET'] = 'test-bucket';
 process.env['AWS_S3_REGION'] = 'us-east-1';
 process.env['AWS_ACCESS_KEY_ID'] = 'test-access-key';
 process.env['AWS_SECRET_ACCESS_KEY'] = 'test-secret-key';
+process.env['AWS_S3_ENDPOINT'] = '';
+process.env['AWS_SIGNED_URL_EXPIRES_IN'] = '3600';
+process.env['MAX_FILE_SIZE'] = '52428800';
+process.env['AWS_S3_BUCKET'] = 'test-bucket';
+process.env['AWS_S3_REGION'] = 'us-east-1';
+process.env['AWS_ACCESS_KEY_ID'] = 'test-access-key';
+process.env['AWS_SECRET_ACCESS_KEY'] = 'test-secret-key';
 process.env['AWS_S3_ENDPOINT'] = 'https://s3.amazonaws.com';
 process.env['AWS_SIGNED_URL_EXPIRES_IN'] = '3600';
 
@@ -85,7 +92,7 @@ jest.mock('@prisma/client', () => {
             update: jest.fn(),
          },
       })),
-      Role: { USER: 'USER', ADMIN: 'ADMIN' },
+      Role: { USER: 'USER', ADMIN: 'ADMIN', AUTHOR: 'AUTHOR' },
       BillingInterval: {
          MONTHLY: 'MONTHLY',
          QUARTERLY: 'QUARTERLY',

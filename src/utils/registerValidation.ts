@@ -1,7 +1,16 @@
 import { Role } from '@prisma/client';
 import { RegisterRequest, ValidationError } from '../types';
+import { validateRegistrationPassword } from './passwordValidation';
 
-export function validateRegisterRequest(body: RegisterRequest): RegisterRequest {
+export interface RegisterValidationOptions {
+   isMultipart?: boolean;
+}
+
+export function validateRegisterRequest(
+   body: RegisterRequest,
+   options: RegisterValidationOptions = {},
+): RegisterRequest {
+   const { isMultipart = false } = options;
    const {
       email,
       password,
@@ -22,8 +31,25 @@ export function validateRegisterRequest(body: RegisterRequest): RegisterRequest 
       throw new ValidationError('Password is required', { password: ['Password is required'] });
    }
 
+   const passwordValidationErrors = validateRegistrationPassword(password, body.confirmPassword);
+   if (Object.keys(passwordValidationErrors).length > 0) {
+      throw new ValidationError('Invalid password', passwordValidationErrors);
+   }
+
    if (type !== 'USER' && type !== 'AUTHOR') {
       throw new ValidationError('Invalid user type', { type: ['Type must be USER or AUTHOR'] });
+   }
+
+   if (isMultipart && type !== 'AUTHOR') {
+      throw new ValidationError('User registration requires application/json', {
+         type: ['USER registration must use application/json, not multipart/form-data'],
+      });
+   }
+
+   if (!isMultipart && type === 'AUTHOR') {
+      throw new ValidationError('Author registration requires multipart/form-data', {
+         type: ['AUTHOR registration must use multipart/form-data with type=AUTHOR'],
+      });
    }
 
    if (type === 'AUTHOR') {

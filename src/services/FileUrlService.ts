@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { config } from '../config/env';
+import { getFileUrl } from '../middleware/RegisterUploadMiddleware';
 import { StorageFactory } from './storage/StorageFactory';
 
 export type ImageKeyDirectory =
@@ -10,6 +11,87 @@ export type ImageKeyDirectory =
 export class FileUrlService {
    shouldSignUrls(): boolean {
       return config.NODE_ENV !== 'development';
+   }
+
+   normalizeToS3Key(stored: string): string | null {
+      const trimmed = stored.trim();
+      if (!trimmed) {
+         return null;
+      }
+
+      if (trimmed.startsWith('file://')) {
+         return null;
+      }
+
+      if (trimmed.startsWith('/uploads/')) {
+         return trimmed.slice(1);
+      }
+
+      if (trimmed.startsWith('uploads/')) {
+         return trimmed.replace(/\\/g, '/');
+      }
+
+      if (/^https?:\/\//i.test(trimmed)) {
+         return this.extractKeyFromHttpUrl(trimmed);
+      }
+
+      if (path.isAbsolute(trimmed) || /^[A-Za-z]:\\/.test(trimmed)) {
+         return null;
+      }
+
+      return trimmed.replace(/\\/g, '/');
+   }
+
+   private extractKeyFromHttpUrl(urlString: string): string | null {
+      try {
+         const url = new URL(urlString);
+         const pathname = decodeURIComponent(url.pathname.replace(/^\/+/, ''));
+
+         if (config.AWS_S3_BUCKET && pathname.startsWith(`${config.AWS_S3_BUCKET}/`)) {
+            return pathname.slice(config.AWS_S3_BUCKET.length + 1);
+         }
+
+         if (config.AWS_S3_ENDPOINT) {
+            const endpointHost = new URL(config.AWS_S3_ENDPOINT).host;
+            if (url.host === endpointHost && pathname.startsWith(`${config.AWS_S3_BUCKET}/`)) {
+               return pathname.slice(config.AWS_S3_BUCKET.length + 1);
+            }
+         }
+
+         if (url.hostname.startsWith(`${config.AWS_S3_BUCKET}.`)) {
+            return pathname;
+         }
+
+         return null;
+      } catch {
+         return null;
+      }
+   }
+
+   async resolveForClient(stored?: string | null): Promise<string | undefined> {
+      if (!stored) {
+         return undefined;
+      }
+
+      const trimmed = stored.trim();
+      if (!trimmed) {
+         return undefined;
+      }
+
+      if (!this.shouldSignUrls()) {
+         if (trimmed.startsWith('/uploads/')) {
+            return trimmed;
+         }
+         return getFileUrl(trimmed);
+      }
+
+      const key = this.normalizeToS3Key(trimmed);
+      if (!key) {
+         return trimmed;
+      }
+
+      const storageProvider = StorageFactory.getStorageProvider();
+      return storageProvider.getFileUrl(key, config.AWS_SIGNED_URL_EXPIRES_IN);
    }
 
    async uploadLocalFileToStorage(
@@ -23,17 +105,6 @@ export class FileUrlService {
       return s3Key.replace(/\\/g, '/');
    }
 
-   private toStorageKey(localPath: string, keyDirectory: ImageKeyDirectory): string {
-      const normalized = path.normalize(localPath).replace(/\\/g, '/');
-      const uploadsIndex = normalized.lastIndexOf('uploads/');
-
-      if (uploadsIndex !== -1) {
-         return normalized.slice(uploadsIndex);
-      }
-
-      return `${keyDirectory}/${path.basename(normalized)}`;
-   }
-
    async processUploadedImageFile(
       localPath: string,
       keyDirectory: ImageKeyDirectory,
@@ -41,14 +112,20 @@ export class FileUrlService {
       filenamePrefix = 'image',
    ): Promise<string> {
       if (!this.shouldSignUrls()) {
-         return this.toStorageKey(localPath, keyDirectory);
+         return getFileUrl(localPath);
       }
 
       const ext = path.extname(localPath) || '.jpg';
       const uniqueSuffix = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
       const s3Key = `${keyDirectory}/${filenamePrefix}-${uniqueSuffix}${ext}`;
 
-      return this.uploadLocalFileToStorage(localPath, s3Key, contentType);
+      const storedKey = await this.uploadLocalFileToStorage(localPath, s3Key, contentType);
+
+      if (fs.existsSync(localPath)) {
+         fs.unlinkSync(localPath);
+      }
+
+      return storedKey;
    }
 }
 

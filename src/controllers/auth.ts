@@ -29,8 +29,8 @@ import {
    validateDeviceContext,
 } from '../utils/deviceValidation';
 import { validateRegisterRequest } from '../utils/registerValidation';
-import { getDeviceRequestMeta, handleAuthControllerError } from '../utils/authController';
 import { fileUrlService } from '../services/FileUrlService';
+import { getDeviceRequestMeta, handleAuthControllerError } from '../utils/authController';
 import { generateCsrfToken, getCsrfCookieOptions } from '../utils/csrf';
 import { ValidationError } from '../types';
 
@@ -87,7 +87,9 @@ export class AuthController {
             );
          }
 
-         const data = validateRegisterRequest(registerBody);
+         const contentType = req.headers['content-type'] ?? '';
+         const isMultipart = contentType.startsWith('multipart/form-data');
+         const data = validateRegisterRequest(registerBody, { isMultipart });
          const result = await authService.register(data);
 
          res.status(201).json({

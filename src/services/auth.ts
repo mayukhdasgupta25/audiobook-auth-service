@@ -83,6 +83,7 @@ export class AuthService {
             address: address!,
             ...(contact !== undefined ? { contact } : {}),
             ...(profileImage !== undefined ? { profileImage } : {}),
+            ...(profileImage !== undefined ? { profileImage } : {}),
          });
       } else {
          await redisService.setPendingUserRegistration(user.id, {
