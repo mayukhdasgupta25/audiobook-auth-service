@@ -103,7 +103,6 @@ describe('AuthService register/verify author flow', () => {
          lastName: 'Doe',
          address: '123 Main St',
          contact: '+1-555-0100',
-         profileImage: 'uploads/images/authors/image-1.jpg',
       });
 
       expect(redisService.setPendingAuthorRegistration).toHaveBeenCalledWith('author-user-1', {
