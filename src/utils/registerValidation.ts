@@ -1,6 +1,31 @@
 import { Role } from '@prisma/client';
 import { RegisterRequest, ValidationError } from '../types';
 import { validateRegistrationPassword } from './passwordValidation';
+import { validateIndianContact } from './phoneValidation';
+
+function resolveContactField(
+   contact: unknown,
+   details: Record<string, string[]>,
+   options: { required: boolean; requiredMessage: string },
+): string | undefined {
+   const trimmed =
+      contact !== undefined && contact !== null ? String(contact).trim() : '';
+
+   if (trimmed.length === 0) {
+      if (options.required) {
+         details['contact'] = [options.requiredMessage];
+      }
+      return undefined;
+   }
+
+   const validation = validateIndianContact(trimmed);
+   if (validation.errors.length > 0) {
+      details['contact'] = validation.errors;
+      return undefined;
+   }
+
+   return validation.normalized;
+}
 
 export interface RegisterValidationOptions {
    isMultipart?: boolean;
@@ -67,6 +92,11 @@ export function validateRegisterRequest(
          details['address'] = ['Address is required for author registration'];
       }
 
+      const normalizedContact = resolveContactField(contact, details, {
+         required: false,
+         requiredMessage: 'Contact is required for author registration',
+      });
+
       if (Object.keys(details).length > 0) {
          throw new ValidationError('Author registration requires additional fields', details);
       }
@@ -79,9 +109,7 @@ export function validateRegisterRequest(
          firstName: firstName!.trim(),
          lastName: lastName!.trim(),
          address: address!.trim(),
-         ...(contact !== undefined && contact !== null && String(contact).trim().length > 0
-            ? { contact: String(contact).trim() }
-            : {}),
+         ...(normalizedContact !== undefined ? { contact: normalizedContact } : {}),
       };
 
       if (profileImage !== undefined && profileImage !== null && String(profileImage).trim().length > 0) {
@@ -97,9 +125,10 @@ export function validateRegisterRequest(
       userDetails['address'] = ['Address is required for user registration'];
    }
 
-   if (!contact || typeof contact !== 'string' || contact.trim().length === 0) {
-      userDetails['contact'] = ['Contact is required for user registration'];
-   }
+   const normalizedContact = resolveContactField(contact, userDetails, {
+      required: true,
+      requiredMessage: 'Contact is required for user registration',
+   });
 
    if (Object.keys(userDetails).length > 0) {
       throw new ValidationError('User registration requires additional fields', userDetails);
@@ -111,7 +140,7 @@ export function validateRegisterRequest(
       role: body.role ?? Role.USER,
       type: 'USER',
       address: address!.trim(),
-      contact: contact!.trim(),
+      contact: normalizedContact!,
    };
 
    if (firstName !== undefined && firstName !== null && String(firstName).trim().length > 0) {

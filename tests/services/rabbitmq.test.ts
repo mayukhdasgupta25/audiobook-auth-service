@@ -134,7 +134,7 @@ describe('RabbitMQService', () => {
          const data = {
             userId: 'user-123',
             address: '456 Oak Ave',
-            contact: '+1-555-0200',
+            contact: '+919123456789',
          };
          mockChannel.publish.mockReturnValueOnce(true);
 
@@ -157,7 +157,7 @@ describe('RabbitMQService', () => {
             firstName: 'John',
             lastName: 'Doe Smith',
             address: '456 Oak Ave',
-            contact: '+1-555-0200',
+            contact: '+919123456789',
             avatar: 'uploads/images/users/avatar-1.jpg',
          };
          mockChannel.publish.mockReturnValueOnce(true);
@@ -181,7 +181,7 @@ describe('RabbitMQService', () => {
             firstName: 'Jane',
             lastName: 'Doe',
             address: '123 Main St',
-            contact: '+1-555-0100',
+            contact: '+919876543210',
          };
          mockChannel.publish.mockReturnValueOnce(true);
 
@@ -246,7 +246,7 @@ describe('RabbitMQService', () => {
             rabbitmqService.publishUserCreated({
                userId: 'user-123',
                address: '456 Oak Ave',
-               contact: '+1-555-0200',
+               contact: '+919123456789',
             }),
          ).rejects.toThrow('Failed to publish message to RabbitMQ');
       });
@@ -258,7 +258,7 @@ describe('RabbitMQService', () => {
             rabbitmqService.publishUserCreated({
                userId: 'user-123',
                address: '456 Oak Ave',
-               contact: '+1-555-0200',
+               contact: '+919123456789',
             }),
          ).rejects.toThrow('RabbitMQ service is not connected');
       });
