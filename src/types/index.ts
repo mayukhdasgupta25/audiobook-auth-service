@@ -36,6 +36,7 @@ export interface JWKS {
 export interface RegisterRequest {
    email: string;
    password: string;
+   confirmPassword?: string;
    role?: Role;
    type?: 'USER' | 'AUTHOR';
    firstName?: string;

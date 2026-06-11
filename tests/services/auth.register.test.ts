@@ -94,7 +94,7 @@ describe('AuthService register/verify author flow', () => {
 
       await authService.register({
          email: 'author@example.com',
-         password: 'password123',
+         password: 'Password1!',
          type: 'AUTHOR',
          firstName: 'Jane',
          lastName: 'Doe',
@@ -124,7 +124,7 @@ describe('AuthService register/verify author flow', () => {
 
       await authService.register({
          email: 'author@example.com',
-         password: 'password123',
+         password: 'Password1!',
          type: 'AUTHOR',
          firstName: 'Jane',
          lastName: 'Doe',

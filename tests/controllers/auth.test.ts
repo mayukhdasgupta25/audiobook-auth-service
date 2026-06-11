@@ -99,6 +99,8 @@ describe('AuthController', () => {
    });
 
    describe('register', () => {
+      const validPassword = 'Password1!';
+
       test('should register successfully and return 201', async () => {
          const mockUser = { id: 'user-123', email: 'test@example.com' };
          (authService.register as jest.Mock).mockResolvedValue({
@@ -106,13 +108,17 @@ describe('AuthController', () => {
             otpSent: true,
          });
 
-         mockRequest.body = { email: 'test@example.com', password: 'password123' };
+         mockRequest.body = {
+            email: 'test@example.com',
+            password: validPassword,
+            confirmPassword: validPassword,
+         };
 
          await authController.register(mockRequest as Request, mockResponse as Response);
 
          expect(authService.register).toHaveBeenCalledWith({
             email: 'test@example.com',
-            password: 'password123',
+            password: validPassword,
             role: 'USER',
             type: 'USER',
          });
@@ -128,7 +134,8 @@ describe('AuthController', () => {
          mockRequest.body = {
             type: 'AUTHOR',
             email: 'author@example.com',
-            password: 'password123',
+            password: validPassword,
+            confirmPassword: validPassword,
             firstName: 'Jane',
             lastName: 'Doe',
             address: '123 Main St',
@@ -157,7 +164,8 @@ describe('AuthController', () => {
          mockRequest.body = {
             type: 'AUTHOR',
             email: 'author@example.com',
-            password: 'password123',
+            password: validPassword,
+            confirmPassword: validPassword,
             firstName: 'Jane',
             lastName: 'Doe',
             address: '123 Main St',
@@ -178,7 +186,7 @@ describe('AuthController', () => {
          expect(authService.register).toHaveBeenCalledWith({
             type: 'AUTHOR',
             email: 'author@example.com',
-            password: 'password123',
+            password: validPassword,
             role: 'AUTHOR',
             firstName: 'Jane',
             lastName: 'Doe',
@@ -193,7 +201,11 @@ describe('AuthController', () => {
             new Error('User with this email already exists')
          );
 
-         mockRequest.body = { email: 'existing@example.com', password: 'password123' };
+         mockRequest.body = {
+            email: 'existing@example.com',
+            password: validPassword,
+            confirmPassword: validPassword,
+         };
 
          await authController.register(mockRequest as Request, mockResponse as Response);
 
@@ -206,7 +218,11 @@ describe('AuthController', () => {
       test('should handle generic registration errors', async () => {
          (authService.register as jest.Mock).mockRejectedValue(new Error('Database error'));
 
-         mockRequest.body = { email: 'test@example.com', password: 'password123' };
+         mockRequest.body = {
+            email: 'test@example.com',
+            password: validPassword,
+            confirmPassword: validPassword,
+         };
 
          await authController.register(mockRequest as Request, mockResponse as Response);
 

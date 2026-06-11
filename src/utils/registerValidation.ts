@@ -1,5 +1,6 @@
 import { Role } from '@prisma/client';
 import { RegisterRequest, ValidationError } from '../types';
+import { validateRegistrationPassword } from './passwordValidation';
 
 export interface RegisterValidationOptions {
    isMultipart?: boolean;
@@ -18,6 +19,11 @@ export function validateRegisterRequest(
 
    if (!password || typeof password !== 'string') {
       throw new ValidationError('Password is required', { password: ['Password is required'] });
+   }
+
+   const passwordValidationErrors = validateRegistrationPassword(password, body.confirmPassword);
+   if (Object.keys(passwordValidationErrors).length > 0) {
+      throw new ValidationError('Invalid password', passwordValidationErrors);
    }
 
    if (type !== 'USER' && type !== 'AUTHOR') {
