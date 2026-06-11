@@ -11,6 +11,7 @@ import {
 import { AuthenticatedSubscriptionRequest, SubscriptionError } from '../types/subscription';
 import { subscriptionMessages } from '../utils/subscriptionMessages';
 import { handleSubscriptionError, calculatePagination } from '../utils/subscriptionController';
+import { isGlobalAdminRole } from '../constants/authRoles';
 
 export class UserSubscriptionController {
    private subscriptionService: UserSubscriptionService;
@@ -30,7 +31,7 @@ export class UserSubscriptionController {
    private async assertSubscriptionAccess(req: Request, subscriptionId: string): Promise<void> {
       const authUser = this.getAuthUser(req);
       const sub = await this.subscriptionService.getSubscriptionById(subscriptionId);
-      if (sub.userId !== authUser.id && (req as AuthenticatedSubscriptionRequest).user?.role !== 'ADMIN') {
+      if (sub.userId !== authUser.id && !isGlobalAdminRole((req as AuthenticatedSubscriptionRequest).user?.role)) {
          throw SubscriptionError.forbidden(subscriptionMessages.error.forbidden.admin_required);
       }
    }
@@ -41,7 +42,7 @@ export class UserSubscriptionController {
          const body = req.body as CreateUserSubscriptionDto & { userId?: string };
          const targetUserId = body.userId ?? authUser.id;
          if (body.userId && body.userId !== authUser.id) {
-            if ((req as AuthenticatedSubscriptionRequest).user?.role !== 'ADMIN') {
+            if (!isGlobalAdminRole((req as AuthenticatedSubscriptionRequest).user?.role)) {
                throw SubscriptionError.forbidden(subscriptionMessages.error.forbidden.admin_required);
             }
          }
@@ -58,7 +59,7 @@ export class UserSubscriptionController {
    getAllSubscriptions = async (req: Request, res: Response): Promise<void> => {
       try {
          this.getAuthUser(req);
-         if ((req as AuthenticatedSubscriptionRequest).user?.role !== 'ADMIN') {
+         if (!isGlobalAdminRole((req as AuthenticatedSubscriptionRequest).user?.role)) {
             throw SubscriptionError.forbidden(subscriptionMessages.error.forbidden.admin_required);
          }
          const queryParams: UserSubscriptionQueryParams = {
@@ -132,7 +133,7 @@ export class UserSubscriptionController {
       try {
          const authUser = this.getAuthUser(req);
          const { userId } = req.params as { userId: string };
-         if (userId !== authUser.id && (req as AuthenticatedSubscriptionRequest).user?.role !== 'ADMIN') {
+         if (userId !== authUser.id && !isGlobalAdminRole((req as AuthenticatedSubscriptionRequest).user?.role)) {
             throw SubscriptionError.forbidden(subscriptionMessages.error.forbidden.admin_required);
          }
          const queryParams: UserSubscriptionQueryParams = {

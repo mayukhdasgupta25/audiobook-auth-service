@@ -1,4 +1,6 @@
 import { User, Role, UserType, OtpPurpose, EmailType } from '@prisma/client';
+import { ClientTypeValue } from '../constants/clientType';
+import { RegisterAccountTypeValue } from '../constants/registerAccountType';
 
 // JWT Payload interface
 export interface JWTPayload {
@@ -38,7 +40,7 @@ export interface RegisterRequest {
    password: string;
    confirmPassword?: string;
    role?: Role;
-   type?: 'USER' | 'AUTHOR';
+   type?: RegisterAccountTypeValue;
    firstName?: string;
    lastName?: string;
    address?: string;
@@ -93,7 +95,7 @@ export interface DeviceRequestMeta {
 export interface LoginRequest {
    email: string;
    password: string;
-   clientType?: 'browser' | 'mobile';
+   clientType?: ClientTypeValue;
    app?: string;
    device: DeviceContext;
 }
@@ -121,7 +123,7 @@ export interface RevokeTokenRequest {
 
 export interface GoogleOAuthRequest {
    token: string;
-   clientType?: 'browser' | 'mobile';
+   clientType?: ClientTypeValue;
    app?: string;
    device: DeviceContext;
 }

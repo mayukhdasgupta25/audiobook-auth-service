@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { validateCsrfToken } from '../utils/csrf';
+import { ClientType } from '../constants/clientType';
 
 const CSRF_PROTECTED_PATHS = new Set(['/login', '/google', '/refresh', '/logout']);
 
@@ -10,7 +11,7 @@ export function requiresCsrfProtection(req: Request): boolean {
    }
 
    if (path === '/login' || path === '/google') {
-      return req.body?.clientType === 'browser';
+      return req.body?.clientType === ClientType.BROWSER;
    }
 
    if (path === '/refresh' || path === '/logout') {

@@ -1,8 +1,8 @@
 import { ValidationError } from '../types';
 import type { DeviceContext } from '../types';
+import { DEVICE_OPTIONAL_VERIFY_OTP_TYPES } from '../constants/registrationVerifyType';
 
 const DEVICE_ID_MAX_LENGTH = 128;
-const DEVICE_OPTIONAL_VERIFY_OTP_TYPES = new Set(['organization', 'author']);
 
 export function isDeviceOptionalForRegistrationVerifyType(type: unknown): boolean {
    if (typeof type !== 'string') {
