@@ -66,17 +66,7 @@ export class AuthController {
       try {
          const registerBody = { ...req.body } as RegisterRequest;
 
-         const avatarFile = (req as Request & { avatarFile?: Express.Multer.File }).avatarFile;
          const profileImageFile = (req as Request & { profileImageFile?: Express.Multer.File }).profileImageFile;
-
-         if (avatarFile) {
-            registerBody.avatar = await fileUrlService.processUploadedImageFile(
-               avatarFile.path,
-               'uploads/images/users',
-               avatarFile.mimetype,
-               'avatar',
-            );
-         }
 
          if (profileImageFile) {
             registerBody.profileImage = await fileUrlService.processUploadedImageFile(
