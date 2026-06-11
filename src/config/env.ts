@@ -141,6 +141,18 @@ export const config = {
 
    LOG_LEVEL: requireEnv("LOG_LEVEL"),
 
+   MAX_FILE_SIZE: requireIntEnv("MAX_FILE_SIZE"),
+   DEV_UPLOAD_DIR: nodeEnv === "development" ? "./src/uploads" : "./uploads",
+   DEV_USER_AVATAR_DIR: nodeEnv === "development" ? "./src/uploads/images/users" : "./uploads/images/users",
+   DEV_AUTHOR_IMAGE_DIR: nodeEnv === "development" ? "./src/uploads/images/authors" : "./uploads/images/authors",
+
+   AWS_S3_BUCKET: requireEnv("AWS_S3_BUCKET"),
+   AWS_S3_REGION: requireEnv("AWS_S3_REGION"),
+   AWS_ACCESS_KEY_ID: requireEnv("AWS_ACCESS_KEY_ID"),
+   AWS_SECRET_ACCESS_KEY: requireEnv("AWS_SECRET_ACCESS_KEY"),
+   AWS_S3_ENDPOINT: requireEnv("AWS_S3_ENDPOINT"),
+   AWS_SIGNED_URL_EXPIRES_IN: requireIntEnv("AWS_SIGNED_URL_EXPIRES_IN"),
+
    HEALTH_SUPPORT_EMAIL,
    HEALTH_SUPPORT_PASSWORD,
 };

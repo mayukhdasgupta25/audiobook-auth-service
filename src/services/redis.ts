@@ -1,6 +1,6 @@
 import { createClient, RedisClientType } from 'redis';
 import { config } from '../config/env';
-import { RevokedToken, JWKS, PendingAuthorRegistration } from '../types';
+import { RevokedToken, JWKS, PendingAuthorRegistration, PendingUserRegistration } from '../types';
 import { redisLogger } from '../utils/logger';
 
 /**
@@ -273,6 +273,10 @@ export class RedisService {
       return `pending-author:${userId}`;
    }
 
+   private pendingUserKey(userId: string): string {
+      return `pending-user:${userId}`;
+   }
+
    /**
     * Store pending author registration metadata until OTP verification (10 min TTL)
     */
@@ -317,6 +321,53 @@ export class RedisService {
          await this.client.del(this.pendingAuthorKey(userId));
       } catch (error) {
          redisLogger.error({ err: error, userId }, 'Failed to delete pending author registration');
+      }
+   }
+
+   /**
+    * Store pending user registration metadata until OTP verification (10 min TTL)
+    */
+   async setPendingUserRegistration(
+      userId: string,
+      data: PendingUserRegistration,
+      ttlSeconds: number = 600,
+   ): Promise<void> {
+      try {
+         await this.client.setEx(
+            this.pendingUserKey(userId),
+            ttlSeconds,
+            JSON.stringify(data),
+         );
+      } catch (error) {
+         redisLogger.error({ err: error, userId }, 'Failed to store pending user registration');
+         throw new Error('Failed to store user registration data');
+      }
+   }
+
+   /**
+    * Get pending user registration metadata
+    */
+   async getPendingUserRegistration(userId: string): Promise<PendingUserRegistration | null> {
+      try {
+         const result = await this.client.get(this.pendingUserKey(userId));
+         if (!result) {
+            return null;
+         }
+         return JSON.parse(result) as PendingUserRegistration;
+      } catch (error) {
+         redisLogger.error({ err: error, userId }, 'Failed to get pending user registration');
+         return null;
+      }
+   }
+
+   /**
+    * Delete pending user registration metadata
+    */
+   async deletePendingUserRegistration(userId: string): Promise<void> {
+      try {
+         await this.client.del(this.pendingUserKey(userId));
+      } catch (error) {
+         redisLogger.error({ err: error, userId }, 'Failed to delete pending user registration');
       }
    }
 }

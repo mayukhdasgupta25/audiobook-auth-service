@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
+import path from 'path';
 import { config } from './config/env';
 import authRoutes from './routes/auth';
 import subscriptionPlanRoutes from './routes/subscriptionPlan';
@@ -45,6 +46,10 @@ export const createApp = (): express.Application => {
 
    // Request logging
    app.use(requestLogger);
+
+   if (config.NODE_ENV === 'development') {
+      app.use('/uploads', express.static(path.join(process.cwd(), 'src', 'uploads')));
+   }
 
    // Health check endpoint (database, Redis, RabbitMQ) — separate support auth
    app.get('/api/auth/health', requireHealthSupportAuth, async (_req, res) => {
