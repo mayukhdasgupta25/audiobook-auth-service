@@ -1,8 +1,16 @@
 import { Role } from '@prisma/client';
 import { RegisterRequest, ValidationError } from '../types';
 
-export function validateRegisterRequest(body: RegisterRequest): RegisterRequest {
-   const { email, password, type = 'USER', firstName, lastName, address, contact } = body;
+export interface RegisterValidationOptions {
+   isMultipart?: boolean;
+}
+
+export function validateRegisterRequest(
+   body: RegisterRequest,
+   options: RegisterValidationOptions = {},
+): RegisterRequest {
+   const { isMultipart = false } = options;
+   const { email, password, type = 'USER', firstName, lastName, address, contact, profileImage } = body;
 
    if (!email || typeof email !== 'string') {
       throw new ValidationError('Email is required', { email: ['Email is required'] });
@@ -14,6 +22,18 @@ export function validateRegisterRequest(body: RegisterRequest): RegisterRequest 
 
    if (type !== 'USER' && type !== 'AUTHOR') {
       throw new ValidationError('Invalid user type', { type: ['Type must be USER or AUTHOR'] });
+   }
+
+   if (isMultipart && type !== 'AUTHOR') {
+      throw new ValidationError('User registration requires application/json', {
+         type: ['USER registration must use application/json, not multipart/form-data'],
+      });
+   }
+
+   if (!isMultipart && type === 'AUTHOR') {
+      throw new ValidationError('Author registration requires multipart/form-data', {
+         type: ['AUTHOR registration must use multipart/form-data with type=AUTHOR'],
+      });
    }
 
    if (type === 'AUTHOR') {
@@ -45,6 +65,9 @@ export function validateRegisterRequest(body: RegisterRequest): RegisterRequest 
          address: address!.trim(),
          ...(contact !== undefined && contact !== null && String(contact).trim().length > 0
             ? { contact: String(contact).trim() }
+            : {}),
+         ...(profileImage !== undefined && profileImage !== null && String(profileImage).trim().length > 0
+            ? { profileImage: String(profileImage).trim() }
             : {}),
       };
    }

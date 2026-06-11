@@ -42,6 +42,7 @@ export interface RegisterRequest {
    lastName?: string;
    address?: string;
    contact?: string;
+   profileImage?: string;
 }
 
 export interface PendingAuthorRegistration {
@@ -49,6 +50,7 @@ export interface PendingAuthorRegistration {
    lastName: string;
    address: string;
    contact?: string;
+   profileImage?: string;
 }
 
 export interface AuthorCreatedEvent {
@@ -57,6 +59,7 @@ export interface AuthorCreatedEvent {
    lastName: string;
    address: string;
    contact?: string;
+   profileImage?: string;
 }
 
 export interface DeviceContext {

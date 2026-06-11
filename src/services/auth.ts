@@ -38,7 +38,7 @@ export class AuthService {
     * Register a new user
     */
    async register(data: RegisterRequest): Promise<{ user: UserResponse; otpSent: boolean }> {
-      const { email, password, role, type = 'USER', firstName, lastName, address, contact } = data;
+      const { email, password, role, type = 'USER', firstName, lastName, address, contact, profileImage } = data;
       const userType = type === 'AUTHOR' ? UserType.AUTHOR : UserType.USER;
       const userRole = type === 'AUTHOR' ? Role.AUTHOR : (role ?? Role.USER);
 
@@ -71,6 +71,7 @@ export class AuthService {
             lastName: lastName!,
             address: address!,
             ...(contact !== undefined ? { contact } : {}),
+            ...(profileImage !== undefined ? { profileImage } : {}),
          });
       }
 
@@ -171,6 +172,7 @@ export class AuthService {
                lastName: pendingAuthor.lastName,
                address: pendingAuthor.address,
                ...(pendingAuthor.contact !== undefined ? { contact: pendingAuthor.contact } : {}),
+               ...(pendingAuthor.profileImage !== undefined ? { profileImage: pendingAuthor.profileImage } : {}),
             });
          } catch (error) {
             appLogger.error({ err: error }, 'Failed to publish author created event');

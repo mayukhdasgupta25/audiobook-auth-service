@@ -40,6 +40,13 @@ process.env['ARGON2_PARALLELISM'] = '4';
 process.env['LOG_LEVEL'] = 'error';
 process.env['HEALTH_SUPPORT_EMAIL'] = 'no-reply@srota-support.com';
 process.env['HEALTH_SUPPORT_PASSWORD'] = 'test-health-password';
+process.env['MAX_FILE_SIZE'] = '52428800';
+process.env['AWS_S3_BUCKET'] = 'test-bucket';
+process.env['AWS_S3_REGION'] = 'us-east-1';
+process.env['AWS_ACCESS_KEY_ID'] = 'test-access-key';
+process.env['AWS_SECRET_ACCESS_KEY'] = 'test-secret-key';
+process.env['AWS_S3_ENDPOINT'] = '';
+process.env['AWS_SIGNED_URL_EXPIRES_IN'] = '3600';
 
 // Now safe to import modules that depend on config
 // (No imports needed here - tests can import what they need)
@@ -78,7 +85,7 @@ jest.mock('@prisma/client', () => {
             update: jest.fn(),
          },
       })),
-      Role: { USER: 'USER', ADMIN: 'ADMIN' },
+      Role: { USER: 'USER', ADMIN: 'ADMIN', AUTHOR: 'AUTHOR' },
       BillingInterval: {
          MONTHLY: 'MONTHLY',
          QUARTERLY: 'QUARTERLY',

@@ -1,7 +1,12 @@
 import { Request, Response } from 'express';
-import { authController } from '../../src/controllers/auth';
 
 // Mock dependencies
+jest.mock('../../src/services/FileUrlService', () => ({
+   fileUrlService: {
+      processUploadedImageFile: jest.fn().mockResolvedValue('/uploads/images/authors/image-1.jpg'),
+   },
+}));
+
 jest.mock('../../src/services/auth', () => ({
    authService: {
       register: jest.fn(),
@@ -32,7 +37,9 @@ jest.mock('../../src/utils/crypto', () => ({
 }));
 
 // Import after mocks
+import { authController } from '../../src/controllers/auth';
 import { authService } from '../../src/services/auth';
+import { fileUrlService } from '../../src/services/FileUrlService';
 import { redisService } from '../../src/services/redis';
 import { JWTUtils } from '../../src/utils/crypto';
 
@@ -117,12 +124,14 @@ describe('AuthController', () => {
          });
       });
 
-      test('should reject invalid author registration payload', async () => {
+      test('should reject JSON author registration', async () => {
          mockRequest.body = {
             type: 'AUTHOR',
             email: 'author@example.com',
             password: 'password123',
             firstName: 'Jane',
+            lastName: 'Doe',
+            address: '123 Main St',
          };
 
          await authController.register(mockRequest as Request, mockResponse as Response);
@@ -131,10 +140,52 @@ describe('AuthController', () => {
          expect(mockStatus).toHaveBeenCalledWith(400);
          expect(mockJson).toHaveBeenCalledWith(
             expect.objectContaining({
-               error: 'Author registration requires additional fields',
+               error: 'Author registration requires multipart/form-data',
                code: 'VALIDATION_ERROR',
             }),
          );
+      });
+
+      test('should register author from multipart payload with profile image', async () => {
+         const mockUser = { id: 'author-123', email: 'author@example.com' };
+         (authService.register as jest.Mock).mockResolvedValue({
+            user: mockUser,
+            otpSent: true,
+         });
+
+         mockRequest.headers = { 'content-type': 'multipart/form-data; boundary=test' };
+         mockRequest.body = {
+            type: 'AUTHOR',
+            email: 'author@example.com',
+            password: 'password123',
+            firstName: 'Jane',
+            lastName: 'Doe',
+            address: '123 Main St',
+         };
+         (mockRequest as Request & { profileImageFile?: Express.Multer.File }).profileImageFile = {
+            path: './src/uploads/images/authors/image-1.jpg',
+            mimetype: 'image/jpeg',
+         } as Express.Multer.File;
+
+         await authController.register(mockRequest as Request, mockResponse as Response);
+
+         expect(fileUrlService.processUploadedImageFile).toHaveBeenCalledWith(
+            './src/uploads/images/authors/image-1.jpg',
+            'uploads/images/authors',
+            'image/jpeg',
+            'profile',
+         );
+         expect(authService.register).toHaveBeenCalledWith({
+            type: 'AUTHOR',
+            email: 'author@example.com',
+            password: 'password123',
+            role: 'AUTHOR',
+            firstName: 'Jane',
+            lastName: 'Doe',
+            address: '123 Main St',
+            profileImage: '/uploads/images/authors/image-1.jpg',
+         });
+         expect(mockStatus).toHaveBeenCalledWith(201);
       });
 
       test('should handle duplicate email and return 400', async () => {

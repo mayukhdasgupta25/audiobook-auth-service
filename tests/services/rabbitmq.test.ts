@@ -189,6 +189,29 @@ describe('RabbitMQService', () => {
          );
       });
 
+      test('should publish author created event with profileImage filepath', async () => {
+         const data = {
+            userId: 'author-user-123',
+            firstName: 'Jane',
+            lastName: 'Doe',
+            address: '123 Main St',
+            profileImage: '/uploads/images/authors/image-1.jpg',
+         };
+         mockChannel.publish.mockReturnValueOnce(true);
+
+         await rabbitmqService.publishAuthorCreated(data);
+
+         expect(mockChannel.publish).toHaveBeenCalledWith(
+            config.RABBITMQ_AUTHORS_EXCHANGE,
+            'author.created',
+            Buffer.from(JSON.stringify(data)),
+            expect.objectContaining({
+               persistent: true,
+               timestamp: expect.any(Number),
+            })
+         );
+      });
+
       test('should publish generic event', async () => {
          const routingKey = 'user.updated';
          const data = { userId: 'user-456', action: 'update' };

@@ -110,6 +110,36 @@ describe('AuthService register/verify author flow', () => {
       });
    });
 
+   test('should store profileImage in pending author metadata when provided', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue(null);
+      mockPrisma.user.create.mockResolvedValue({
+         id: 'author-user-1',
+         email: 'author@example.com',
+         role: Role.USER,
+         type: UserType.AUTHOR,
+         emailVerified: false,
+         createdAt: new Date(),
+         updatedAt: new Date(),
+      });
+
+      await authService.register({
+         email: 'author@example.com',
+         password: 'password123',
+         type: 'AUTHOR',
+         firstName: 'Jane',
+         lastName: 'Doe',
+         address: '123 Main St',
+         profileImage: '/uploads/images/authors/image-1.jpg',
+      });
+
+      expect(redisService.setPendingAuthorRegistration).toHaveBeenCalledWith('author-user-1', {
+         firstName: 'Jane',
+         lastName: 'Doe',
+         address: '123 Main St',
+         profileImage: '/uploads/images/authors/image-1.jpg',
+      });
+   });
+
    test('should publish author.created after OTP verification for author users', async () => {
       mockPrisma.user.findUnique.mockResolvedValue({
          id: 'author-user-1',
@@ -132,6 +162,7 @@ describe('AuthService register/verify author flow', () => {
          lastName: 'Doe',
          address: '123 Main St',
          contact: '+1-555-0100',
+         profileImage: '/uploads/images/authors/image-1.jpg',
       });
 
       await authService.verifyRegistrationOTP({
@@ -146,6 +177,7 @@ describe('AuthService register/verify author flow', () => {
          lastName: 'Doe',
          address: '123 Main St',
          contact: '+1-555-0100',
+         profileImage: '/uploads/images/authors/image-1.jpg',
       });
       expect(rabbitmqService.publishUserCreated).not.toHaveBeenCalled();
       expect(redisService.deletePendingAuthorRegistration).toHaveBeenCalledWith('author-user-1');

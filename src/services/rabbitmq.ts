@@ -180,6 +180,7 @@ export class RabbitMQService {
       lastName: string;
       address: string;
       contact?: string;
+      profileImage?: string;
    }): Promise<void> {
       if (!this.isServiceConnected()) {
          throw new Error('RabbitMQ service is not connected');
@@ -192,6 +193,7 @@ export class RabbitMQService {
             lastName: string;
             address: string;
             contact?: string;
+            profileImage?: string;
          } = {
             userId: data.userId,
             firstName: data.firstName,
@@ -201,6 +203,9 @@ export class RabbitMQService {
 
          if (data.contact !== undefined) {
             messageData.contact = data.contact;
+         }
+         if (data.profileImage !== undefined) {
+            messageData.profileImage = data.profileImage;
          }
 
          const message = JSON.stringify(messageData);
