@@ -29,8 +29,7 @@ router.post(
    handleAuthorRegistrationUpload,
 
    UploadMiddleware.handleRegistrationImageUpload,
-   authController.register.bind(authController),
-,
+   authController.register.bind(authController)
 );
 router.post('/login', loginRateLimit, validateCsrf, authController.login.bind(authController));
 router.post('/verify-registration-otp', loginRateLimit, authController.verifyRegistrationOTP.bind(authController));
