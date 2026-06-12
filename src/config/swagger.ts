@@ -1,0 +1,408 @@
+/**
+ * Swagger/OpenAPI configuration for auth-service
+ */
+import swaggerJsdoc from 'swagger-jsdoc';
+import swaggerUi from 'swagger-ui-express';
+import { Express } from 'express';
+import { config } from './env';
+
+const options: swaggerJsdoc.Options = {
+   definition: {
+      openapi: '3.0.0',
+      info: {
+         title: 'Srota Auth Service API',
+         version: '1.0.0',
+         description: 'Authentication, organizations, authors, subscriptions, and catalog APIs for the Srota platform.',
+      },
+      servers: [
+         {
+            url: `http://localhost:${config.PORT}`,
+            description: 'Development server',
+         },
+      ],
+      components: {
+         securitySchemes: {
+            bearerAuth: {
+               type: 'http',
+               scheme: 'bearer',
+               bearerFormat: 'JWT',
+               description: 'JWT access token (Authorization: Bearer <token>)',
+            },
+            csrfToken: {
+               type: 'apiKey',
+               in: 'header',
+               name: 'X-CSRF-Token',
+               description: 'CSRF token required for cookie-based login/refresh/logout',
+            },
+            healthBasicAuth: {
+               type: 'http',
+               scheme: 'basic',
+               description: 'Support credentials for health endpoints',
+            },
+         },
+         schemas: {
+            ApiResponse: {
+               type: 'object',
+               properties: {
+                  success: { type: 'boolean', example: true },
+                  message: { type: 'string', example: 'Operation successful' },
+                  data: { type: 'object' },
+                  timestamp: { type: 'string', format: 'date-time' },
+               },
+            },
+            ErrorResponse: {
+               type: 'object',
+               properties: {
+                  success: { type: 'boolean', example: false },
+                  message: { type: 'string', example: 'Request failed' },
+                  timestamp: { type: 'string', format: 'date-time' },
+               },
+            },
+            Organization: {
+               type: 'object',
+               required: ['id', 'name', 'slug'],
+               properties: {
+                  id: { type: 'string', example: 'corg1234567890abcdefghij' },
+                  name: { type: 'string', example: 'Acme Publishing' },
+                  slug: { type: 'string', example: 'acme-publishing' },
+                  description: { type: 'string', nullable: true, example: 'Independent audiobook publisher' },
+                  image: { type: 'string', nullable: true, example: '/uploads/orgs/logo.jpg' },
+                  preferredGenre: { type: 'string', nullable: true, example: 'Fiction' },
+                  websiteUrl: { type: 'string', nullable: true, example: 'https://acme.example.com' },
+                  teamSize: { type: 'string', nullable: true, enum: ['1-10', '11-50', '51-200', '200+'] },
+                  memberCount: { type: 'integer', example: 12 },
+                  createdAt: { type: 'string', format: 'date-time' },
+                  updatedAt: { type: 'string', format: 'date-time' },
+               },
+            },
+            Author: {
+               type: 'object',
+               required: ['id', 'userId', 'slug'],
+               properties: {
+                  id: { type: 'string', example: 'cauthor1234567890abcdefgh' },
+                  userId: { type: 'string', example: 'cuser1234567890abcdefghij' },
+                  slug: { type: 'string', example: 'jane-doe-a1b2c3d4' },
+                  firstName: { type: 'string', nullable: true, example: 'Jane' },
+                  lastName: { type: 'string', nullable: true, example: 'Doe' },
+                  address: { type: 'string', nullable: true },
+                  contact: { type: 'string', nullable: true },
+                  organizations: {
+                     type: 'array',
+                     items: {
+                        type: 'object',
+                        properties: {
+                           id: { type: 'string' },
+                           name: { type: 'string' },
+                           slug: { type: 'string' },
+                        },
+                     },
+                  },
+                  createdAt: { type: 'string', format: 'date-time' },
+                  updatedAt: { type: 'string', format: 'date-time' },
+               },
+            },
+            OrganizationMember: {
+               type: 'object',
+               properties: {
+                  id: { type: 'string' },
+                  userId: { type: 'string', example: 'cuser1234567890abcdefghij' },
+                  organizationId: { type: 'string' },
+                  role: { type: 'string', enum: ['OWNER', 'ADMIN', 'MEMBER'] },
+                  joinedAt: { type: 'string', format: 'date-time' },
+               },
+            },
+            SubscriptionPlan: {
+               type: 'object',
+               properties: {
+                  id: { type: 'string' },
+                  name: { type: 'string', example: 'Premium' },
+                  tierLevel: { type: 'integer', example: 2 },
+                  price: { type: 'number', example: 9.99 },
+                  currency: { type: 'string', example: 'USD' },
+                  interval: { type: 'string', example: 'month' },
+               },
+            },
+            UserSubscription: {
+               type: 'object',
+               properties: {
+                  id: { type: 'string' },
+                  userId: { type: 'string' },
+                  planId: { type: 'string' },
+                  status: { type: 'string', enum: ['ACTIVE', 'TRIALING', 'PAST_DUE', 'CANCELLED'] },
+                  currentPeriodEnd: { type: 'string', format: 'date-time' },
+               },
+            },
+            UserDevice: {
+               type: 'object',
+               properties: {
+                  id: { type: 'string' },
+                  deviceName: { type: 'string', example: 'iPhone 15' },
+                  platform: { type: 'string', example: 'ios' },
+                  lastActiveAt: { type: 'string', format: 'date-time' },
+               },
+            },
+            DeviceContext: {
+               type: 'object',
+               required: ['deviceId'],
+               properties: {
+                  deviceId: {
+                     type: 'string',
+                     example: 'browser-abc123',
+                     description: 'Unique device identifier (1–128 characters)',
+                  },
+                  deviceName: {
+                     type: 'string',
+                     example: 'Chrome on Windows',
+                     description: 'Optional human-readable device label',
+                  },
+                  platform: {
+                     type: 'string',
+                     example: 'web',
+                     description: 'Optional platform identifier (e.g. web, ios, android)',
+                  },
+               },
+            },
+            LoginRequest: {
+               type: 'object',
+               required: ['email', 'password', 'device'],
+               properties: {
+                  email: { type: 'string', format: 'email', example: 'user@example.com' },
+                  password: { type: 'string', format: 'password', example: 'SecurePass123!' },
+                  device: { $ref: '#/components/schemas/DeviceContext' },
+                  slug: {
+                     type: 'string',
+                     example: 'acme-publishing',
+                     description:
+                        'Optional. Organization slug for ORG_ADMIN/ORG_COORDINATOR (must be a member). Author slug for AUTHOR (must belong to the user). Omit for listener login.',
+                  },
+                  clientType: {
+                     type: 'string',
+                     enum: ['browser', 'mobile'],
+                     example: 'browser',
+                     description:
+                        'Optional. When "browser", refresh token is set as httpOnly cookie and omitted from the response body.',
+                  },
+                  app: {
+                     type: 'string',
+                     enum: ['partner'],
+                     example: 'partner',
+                     description:
+                        'Optional. Set to "partner" for partner-portal login; restricts access to org staff, authors, and global admins.',
+                  },
+               },
+            },
+            MobileLoginRequest: {
+               allOf: [
+                  { $ref: '#/components/schemas/LoginRequest' },
+                  {
+                     type: 'object',
+                     required: ['codeChallenge', 'codeChallengeMethod'],
+                     properties: {
+                        codeChallenge: {
+                           type: 'string',
+                           example: 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM',
+                           description: 'PKCE code challenge (S256)',
+                        },
+                        codeChallengeMethod: {
+                           type: 'string',
+                           enum: ['S256'],
+                           example: 'S256',
+                           description: 'PKCE code challenge method (only S256 is supported)',
+                        },
+                     },
+                  },
+               ],
+            },
+            GoogleOAuthRequest: {
+               type: 'object',
+               required: ['token', 'device'],
+               properties: {
+                  token: {
+                     type: 'string',
+                     example: 'ya29.a0AfH6SMB...',
+                     description: 'Google ID token from the client OAuth flow',
+                  },
+                  device: { $ref: '#/components/schemas/DeviceContext' },
+                  clientType: {
+                     type: 'string',
+                     enum: ['browser', 'mobile'],
+                     example: 'browser',
+                     description:
+                        'Optional. When "browser", refresh token is set as httpOnly cookie and omitted from the response body.',
+                  },
+                  app: {
+                     type: 'string',
+                     enum: ['partner'],
+                     example: 'partner',
+                     description:
+                        'Optional. Set to "partner" for partner-portal login; restricts access to org staff, authors, and global admins.',
+                  },
+               },
+            },
+            AuthUser: {
+               type: 'object',
+               required: ['id', 'email', 'role', 'emailVerified'],
+               properties: {
+                  id: { type: 'string', example: 'cuser1234567890abcdefghij' },
+                  email: { type: 'string', format: 'email', example: 'user@example.com' },
+                  role: {
+                     type: 'string',
+                     enum: ['LISTENER', 'GLOBAL_ADMIN', 'ORG_ADMIN', 'ORG_COORDINATOR', 'AUTHOR'],
+                     example: 'LISTENER',
+                  },
+                  emailVerified: { type: 'boolean', example: true },
+               },
+            },
+            AuthResponse: {
+               type: 'object',
+               required: ['accessToken', 'user'],
+               properties: {
+                  message: { type: 'string', example: 'Login successful' },
+                  accessToken: { type: 'string', example: 'eyJhbGciOiJSUzI1NiIs...' },
+                  refreshToken: {
+                     type: 'string',
+                     example: 'dGhpcyBpcyBhIHJlZnJlc2ggdG9rZW4...',
+                     description: 'Present for mobile clients; omitted from body for browser clients (httpOnly cookie instead)',
+                  },
+                  appType: {
+                     type: 'string',
+                     enum: ['organization', 'author'],
+                     description:
+                        'Present when slug resolves to an org or author context. Omitted for listener login.',
+                  },
+                  user: { $ref: '#/components/schemas/AuthUser' },
+               },
+            },
+            RegisterRequest: {
+               type: 'object',
+               required: ['email', 'password'],
+               properties: {
+                  email: { type: 'string', format: 'email', example: 'user@example.com' },
+                  password: { type: 'string', format: 'password', example: 'SecurePass123!' },
+                  confirmPassword: {
+                     type: 'string',
+                     format: 'password',
+                     description: 'Optional. Must match password when provided.',
+                  },
+                  role: {
+                     type: 'string',
+                     enum: ['LISTENER', 'AUTHOR', 'ORG_ADMIN', 'ORG_COORDINATOR'],
+                     example: 'LISTENER',
+                     description:
+                        'Optional. Defaults to LISTENER for JSON requests and AUTHOR for multipart/form-data. GLOBAL_ADMIN is not allowed.',
+                  },
+                  firstName: {
+                     type: 'string',
+                     example: 'Jane',
+                     description: 'Required for AUTHOR registration. Optional for listener/org staff.',
+                  },
+                  lastName: {
+                     type: 'string',
+                     example: 'Doe',
+                     description: 'Required for AUTHOR registration. Optional for listener/org staff.',
+                  },
+                  address: {
+                     type: 'string',
+                     example: '123 Main St, Mumbai',
+                     description: 'Required for all registration types.',
+                  },
+                  contact: {
+                     type: 'string',
+                     example: '+919876543210',
+                     description: 'Required for listener and org staff. Optional for author.',
+                  },
+                  avatar: {
+                     type: 'string',
+                     example: 'https://cdn.example.com/avatars/user.jpg',
+                     description: 'Optional avatar URL for listener/org staff registration.',
+                  },
+                  profileImage: {
+                     type: 'string',
+                     format: 'binary',
+                     description: 'Optional profile image upload for AUTHOR multipart registration.',
+                  },
+               },
+            },
+            RefreshTokenRequest: {
+               type: 'object',
+               properties: {
+                  refreshToken: {
+                     type: 'string',
+                     example: 'dGhpcyBpcyBhIHJlZnJlc2ggdG9rZW4...',
+                     description:
+                        'Optional for mobile clients. Browser clients use the httpOnly refreshToken cookie instead.',
+                  },
+               },
+            },
+         },
+         responses: {
+            Unauthorized: {
+               description: 'Authentication required or token invalid',
+               content: {
+                  'application/json': {
+                     schema: { $ref: '#/components/schemas/ErrorResponse' },
+                     example: { success: false, message: 'Unauthorized', timestamp: '2024-01-15T10:30:00Z' },
+                  },
+               },
+            },
+            Forbidden: {
+               description: 'Insufficient permissions',
+               content: {
+                  'application/json': {
+                     schema: { $ref: '#/components/schemas/ErrorResponse' },
+                  },
+               },
+            },
+            NotFound: {
+               description: 'Resource not found',
+               content: {
+                  'application/json': {
+                     schema: { $ref: '#/components/schemas/ErrorResponse' },
+                  },
+               },
+            },
+            ValidationError: {
+               description: 'Validation failed',
+               content: {
+                  'application/json': {
+                     schema: { $ref: '#/components/schemas/ErrorResponse' },
+                  },
+               },
+            },
+         },
+      },
+      tags: [
+         { name: 'Auth', description: 'Registration, login, tokens, and profile' },
+         { name: 'Organizations', description: 'Organization CRUD and membership' },
+         { name: 'Authors', description: 'Author profiles and org links' },
+         { name: 'Catalog', description: 'Public catalog reads for cross-service hydration' },
+         { name: 'SubscriptionPlans', description: 'Subscription plan management' },
+         { name: 'Subscriptions', description: 'User subscription lifecycle' },
+         { name: 'Devices', description: 'Registered user devices' },
+         { name: 'Health', description: 'Service health checks' },
+      ],
+   },
+   apis: ['./src/docs/*.ts', './src/routes/*.ts', './src/controllers/*.ts'],
+};
+
+const specs = swaggerJsdoc(options);
+
+export const setupSwagger = (app: Express): void => {
+   app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs, {
+      explorer: true,
+      customCss: '.swagger-ui .topbar { display: none }',
+      customSiteTitle: 'Srota Auth Service API',
+      swaggerOptions: {
+         persistAuthorization: true,
+         displayRequestDuration: true,
+         filter: true,
+      },
+   }));
+
+   app.get('/api-docs.json', (_req, res) => {
+      res.setHeader('Content-Type', 'application/json');
+      res.send(specs);
+   });
+};
+
+export { specs };
