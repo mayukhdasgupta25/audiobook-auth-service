@@ -9,7 +9,7 @@ A secure authentication service built with Node.js, Express, TypeScript, and Pri
 - **PKCE Support**: OAuth 2.0 PKCE flow for mobile clients
 - **Email Verification**: Secure email verification with tokens
 - **Password Reset**: Secure password reset flow
-- **Role-Based Access Control**: USER and ADMIN roles
+- **Role-Based Access Control**: LISTENER, AUTHOR, GLOBAL_ADMIN, ORG_ADMIN, and ORG_COORDINATOR roles
 - **Redis Blocklist**: Token revocation and emergency revoke
 - **JWKS Endpoint**: Public key endpoint for JWT verification
 - **Rate Limiting**: Protection against brute force attacks
@@ -305,21 +305,37 @@ Response sets an `httpOnly` `csrfToken` cookie and returns the same value in JSO
 
 Registration uses `multipart/form-data`. Text fields are sent as form fields; images are optional file uploads.
 
-**USER registration** (required: `email`, `password`, `address`, `contact`; optional: `avatar` file, `firstName`, `lastName`):
+**LISTENER registration** (JSON body; required: `email`, `password`, `address`, `contact`; optional: `firstName`, `lastName`, `avatar`):
 
 ```http
 POST /auth/register
-Content-Type: multipart/form-data
+Content-Type: application/json
 
-email=user@example.com
-password=securePassword123
-type=USER
-address=456 Oak Ave
-contact=+1-555-0200
-avatar=<optional image file>
+{
+  "email": "user@example.com",
+  "password": "securePassword123",
+  "role": "LISTENER",
+  "address": "456 Oak Ave",
+  "contact": "+91-9876543210"
+}
 ```
 
-**AUTHOR registration** (required: `email`, `password`, `type=AUTHOR`, `firstName`, `lastName`, `address`; optional: `contact`, `profileImage` file):
+**ORG_ADMIN / ORG_COORDINATOR registration** (same fields as LISTENER; must use a separate email from any existing listener account):
+
+```http
+POST /auth/register
+Content-Type: application/json
+
+{
+  "email": "org-admin@example.com",
+  "password": "securePassword123",
+  "role": "ORG_ADMIN",
+  "address": "456 Oak Ave",
+  "contact": "+91-9876543210"
+}
+```
+
+**AUTHOR registration** (required: `multipart/form-data` with `role=AUTHOR`, `firstName`, `lastName`, `address`; optional: `contact`, `profileImage` file):
 
 ```http
 POST /auth/register
@@ -327,15 +343,15 @@ Content-Type: multipart/form-data
 
 email=author@example.com
 password=securePassword123
-type=AUTHOR
+role=AUTHOR
 firstName=Jane
 lastName=Doe
 address=123 Main St
-contact=+1-555-0100
+contact=+91-9876543210
 profileImage=<optional image file>
 ```
 
-After registration, verify OTP via `POST /auth/verify-registration-otp`. USER clients may still pass optional `firstName` and `lastName` at OTP verification.
+After registration, verify OTP via `POST /auth/verify-registration-otp`. Device is **required** for `LISTENER` registrations and **optional** for `AUTHOR`, `ORG_ADMIN`, and `ORG_COORDINATOR`. LISTENER clients may pass optional `firstName` and `lastName` at OTP verification.
 
 #### Login (Browser)
 
@@ -485,7 +501,7 @@ Content-Type: application/json
 {
   "sub": "user-id",
   "email": "user@example.com",
-  "role": "USER",
+  "role": "LISTENER",
   "iat": 1640995200,
   "exp": 1640995800,
   "jti": "unique-token-id",
@@ -557,7 +573,7 @@ model User {
   id            String    @id @default(uuid())
   email         String    @unique
   password      String    // Hashed password
-  role          Role      @default(USER)
+  role          Role      @default(LISTENER)
   emailVerified Boolean   @default(false)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt

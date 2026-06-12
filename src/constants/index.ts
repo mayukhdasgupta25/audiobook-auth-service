@@ -1,10 +1,13 @@
 export {
    AuthRole,
    AuthRoleGroups,
+   isDeviceOptionalForRole,
    isGlobalAdminRole,
    isGlobalAuthorRole,
    isOrgAdminRole,
    isOrgCoordinatorRole,
+   isOrgStaffRole,
+   isPartnerAppRole,
    isStaffRole,
    normalizeAuthRole,
 } from './authRoles';

@@ -8,6 +8,7 @@ import { userDeviceService } from './userDevice';
 import { appLogger } from '../utils/logger';
 import { ClientType } from '../constants/clientType';
 import { OAuthClientApp } from '../constants/oauthClientApp';
+import { isPartnerAppRole } from '../constants/authRoles';
 import { toUserResponse } from './userProfile';
 import {
    RegisterRequest,
@@ -61,6 +62,11 @@ export class AuthService {
       });
 
       if (existingUser) {
+         if (existingUser.role === Role.LISTENER) {
+            throw new Error(
+               'This email is already registered as a listener account. Organization staff must use a separate email address.',
+            );
+         }
          throw new Error('User with this email already exists');
       }
 
@@ -83,7 +89,6 @@ export class AuthService {
             lastName: lastName!,
             address: address!,
             ...(contact !== undefined ? { contact } : {}),
-            ...(profileImage !== undefined ? { profileImage } : {}),
             ...(profileImage !== undefined ? { profileImage } : {}),
          });
       } else {
@@ -230,7 +235,6 @@ export class AuthService {
       try {
          await rabbitmqService.publishUserCreated({
             userId: updatedUser.id,
-            ...(pendingUser.avatar !== undefined ? { avatar: pendingUser.avatar } : {}),
          });
       } catch (error) {
          appLogger.error({ err: error }, 'Failed to publish user created event');
@@ -691,10 +695,10 @@ export class AuthService {
     * Restrict login/OAuth by client app.
     */
    private assertAppAccess(user: User, app?: string): void {
-      if (app === OAuthClientApp.PARTNER) {
-         if (user.role !== Role.GLOBAL_ADMIN && user.role !== Role.AUTHOR) {
-            throw new Error('Access denied. Global admin or author role required.');
-         }
+      if (app === OAuthClientApp.PARTNER && !isPartnerAppRole(user.role)) {
+         throw new Error(
+            'Access denied. Global admin, author, or organization staff role required.',
+         );
       }
    }
 

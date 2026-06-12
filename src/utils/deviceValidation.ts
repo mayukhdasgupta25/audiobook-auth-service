@@ -1,22 +1,84 @@
+import { Role } from '@prisma/client';
 import { ValidationError } from '../types';
 import type { DeviceContext } from '../types';
-import { DEVICE_OPTIONAL_VERIFY_OTP_TYPES } from '../constants/registrationVerifyType';
+import {
+   isDeviceOptionalForRole,
+} from '../constants/authRoles';
+import { RegistrationVerifyType } from '../constants/registrationVerifyType';
 
 const DEVICE_ID_MAX_LENGTH = 128;
 
+/** @deprecated Use isDeviceOptionalForRole(user.role) instead */
 export function isDeviceOptionalForRegistrationVerifyType(type: unknown): boolean {
    if (typeof type !== 'string') {
       return false;
    }
 
-   return DEVICE_OPTIONAL_VERIFY_OTP_TYPES.has(type.trim().toLowerCase());
+   const normalized = type.trim().toLowerCase();
+   return (
+      normalized === RegistrationVerifyType.AUTHOR ||
+      normalized === RegistrationVerifyType.ORGANIZATION
+   );
+}
+
+/**
+ * Validate legacy `type` param against the registered user's role when provided.
+ */
+export function validateLegacyRegistrationVerifyType(
+   type: unknown,
+   userRole: Role,
+): void {
+   if (type === undefined || type === null || type === '') {
+      return;
+   }
+
+   if (typeof type !== 'string') {
+      throw new ValidationError('Invalid type', { type: ['type must be a string'] }, 400);
+   }
+
+   const normalized = type.trim().toLowerCase();
+
+   if (normalized === RegistrationVerifyType.AUTHOR && userRole !== Role.AUTHOR) {
+      throw new ValidationError(
+         'type does not match registered role',
+         { type: ['type "author" is only valid for AUTHOR registrations'] },
+         400,
+      );
+   }
+
+   if (
+      normalized === RegistrationVerifyType.ORGANIZATION &&
+      userRole !== Role.ORG_ADMIN &&
+      userRole !== Role.ORG_COORDINATOR
+   ) {
+      throw new ValidationError(
+         'type does not match registered role',
+         { type: ['type "organization" is only valid for ORG_ADMIN or ORG_COORDINATOR registrations'] },
+         400,
+      );
+   }
+
+   if (
+      normalized !== RegistrationVerifyType.AUTHOR &&
+      normalized !== RegistrationVerifyType.ORGANIZATION &&
+      userRole === Role.LISTENER
+   ) {
+      // Allow omitted/legacy values for listeners; reject unknown types for non-listeners
+      if (normalized !== 'user' && normalized !== 'listener') {
+         throw new ValidationError(
+            'Invalid type',
+            { type: ['type must be "author" or "organization" when provided'] },
+            400,
+         );
+      }
+   }
 }
 
 export function resolveDeviceContextForRegistrationVerify(
    device: unknown,
-   type: unknown,
+   userRole: Role,
 ): DeviceContext | undefined {
-   if (isDeviceOptionalForRegistrationVerifyType(type)) {
+   if (isDeviceOptionalForRole(userRole)) {
       if (device === undefined || device === null) {
          return undefined;
       }
