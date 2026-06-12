@@ -11,13 +11,10 @@ datasource db {
 }
 
 enum Role {
-   USER
-   ADMIN
-   AUTHOR
-}
-
-enum UserType {
-   USER
+   LISTENER
+   GLOBAL_ADMIN
+   ORG_ADMIN
+   ORG_COORDINATOR
    AUTHOR
 }
 
@@ -51,8 +48,7 @@ model User {
    email         String   @unique
    password      String? // Hashed password (nullable for OAuth users)
    googleId      String?  @unique // Google OAuth ID
-   role          Role     @default(USER)
-   type          UserType @default(USER)
+   role          Role     @default(LISTENER)
    emailVerified Boolean  @default(false)
    firstName     String?
    lastName      String?

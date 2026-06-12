@@ -121,8 +121,7 @@ describe('AuthController', () => {
          expect(authService.register).toHaveBeenCalledWith({
             email: 'test@example.com',
             password: validPassword,
-            role: 'USER',
-            type: 'USER',
+            role: 'LISTENER',
             address: '456 Oak Ave',
             contact: '+919123456789',
          });
@@ -136,7 +135,7 @@ describe('AuthController', () => {
 
       test('should reject JSON author registration', async () => {
          mockRequest.body = {
-            type: 'AUTHOR',
+            role: 'AUTHOR',
             email: 'author@example.com',
             password: validPassword,
             confirmPassword: validPassword,
@@ -166,7 +165,7 @@ describe('AuthController', () => {
 
          mockRequest.headers = { 'content-type': 'multipart/form-data; boundary=test' };
          mockRequest.body = {
-            type: 'AUTHOR',
+            role: 'AUTHOR',
             email: 'author@example.com',
             password: validPassword,
             confirmPassword: validPassword,
@@ -188,7 +187,6 @@ describe('AuthController', () => {
             'profile',
          );
          expect(authService.register).toHaveBeenCalledWith({
-            type: 'AUTHOR',
             email: 'author@example.com',
             password: validPassword,
             role: 'AUTHOR',

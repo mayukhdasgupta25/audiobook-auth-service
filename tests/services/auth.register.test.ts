@@ -1,4 +1,4 @@
-import { Role, UserType } from '@prisma/client';
+import { Role } from '@prisma/client';
 
 const mockPrisma = {
    user: {
@@ -13,8 +13,13 @@ const mockPrisma = {
 
 jest.mock('@prisma/client', () => ({
    PrismaClient: jest.fn(() => mockPrisma),
-   Role: { USER: 'USER', ADMIN: 'ADMIN', AUTHOR: 'AUTHOR' },
-   UserType: { USER: 'USER', AUTHOR: 'AUTHOR' },
+   Role: {
+      LISTENER: 'LISTENER',
+      GLOBAL_ADMIN: 'GLOBAL_ADMIN',
+      ORG_ADMIN: 'ORG_ADMIN',
+      ORG_COORDINATOR: 'ORG_COORDINATOR',
+      AUTHOR: 'AUTHOR',
+   },
    OtpPurpose: {
       REGISTRATION: 'REGISTRATION',
    },
@@ -88,8 +93,7 @@ describe('AuthService register/verify author flow', () => {
       mockPrisma.user.create.mockResolvedValue({
          id: 'author-user-1',
          email: 'author@example.com',
-         role: Role.USER,
-         type: UserType.AUTHOR,
+         role: Role.AUTHOR,
          emailVerified: false,
          createdAt: new Date(),
          updatedAt: new Date(),
@@ -98,7 +102,7 @@ describe('AuthService register/verify author flow', () => {
       await authService.register({
          email: 'author@example.com',
          password: 'Password1!',
-         type: 'AUTHOR',
+         role: Role.AUTHOR,
          firstName: 'Jane',
          lastName: 'Doe',
          address: '123 Main St',
@@ -118,8 +122,7 @@ describe('AuthService register/verify author flow', () => {
       mockPrisma.user.create.mockResolvedValue({
          id: 'author-user-1',
          email: 'author@example.com',
-         role: Role.USER,
-         type: UserType.AUTHOR,
+         role: Role.AUTHOR,
          emailVerified: false,
          createdAt: new Date(),
          updatedAt: new Date(),
@@ -128,7 +131,7 @@ describe('AuthService register/verify author flow', () => {
       await authService.register({
          email: 'author@example.com',
          password: 'Password1!',
-         type: 'AUTHOR',
+         role: Role.AUTHOR,
          firstName: 'Jane',
          lastName: 'Doe',
          address: '123 Main St',
@@ -147,15 +150,13 @@ describe('AuthService register/verify author flow', () => {
       mockPrisma.user.findUnique.mockResolvedValue({
          id: 'author-user-1',
          email: 'author@example.com',
-         role: Role.USER,
-         type: UserType.AUTHOR,
+         role: Role.AUTHOR,
          emailVerified: false,
       });
       mockPrisma.user.update.mockResolvedValue({
          id: 'author-user-1',
          email: 'author@example.com',
-         role: Role.USER,
-         type: UserType.AUTHOR,
+         role: Role.AUTHOR,
          emailVerified: true,
       });
       mockPrisma.refreshToken.create.mockResolvedValue({});
@@ -190,15 +191,13 @@ describe('AuthService register/verify author flow', () => {
       mockPrisma.user.findUnique.mockResolvedValue({
          id: 'author-user-1',
          email: 'author@example.com',
-         role: Role.USER,
-         type: UserType.AUTHOR,
+         role: Role.AUTHOR,
          emailVerified: false,
       });
       mockPrisma.user.update.mockResolvedValue({
          id: 'author-user-1',
          email: 'author@example.com',
-         role: Role.USER,
-         type: UserType.AUTHOR,
+         role: Role.AUTHOR,
          emailVerified: true,
       });
       mockPrisma.refreshToken.create.mockResolvedValue({});
@@ -227,15 +226,13 @@ describe('AuthService register/verify author flow', () => {
       mockPrisma.user.findUnique.mockResolvedValue({
          id: 'user-1',
          email: 'user@example.com',
-         role: Role.USER,
-         type: UserType.USER,
+         role: Role.LISTENER,
          emailVerified: false,
       });
       mockPrisma.user.update.mockResolvedValue({
          id: 'user-1',
          email: 'user@example.com',
-         role: Role.USER,
-         type: UserType.USER,
+         role: Role.LISTENER,
          emailVerified: true,
       });
       mockPrisma.refreshToken.create.mockResolvedValue({});

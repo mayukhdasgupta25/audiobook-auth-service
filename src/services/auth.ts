@@ -1,4 +1,4 @@
-import { PrismaClient, User, Role, UserType, OtpPurpose } from '@prisma/client';
+import { PrismaClient, User, Role, OtpPurpose } from '@prisma/client';
 import { PasswordUtils, TokenUtils } from '../utils/crypto';
 import { redisService } from './redis';
 import { rabbitmqService } from './rabbitmq';
@@ -8,7 +8,6 @@ import { userDeviceService } from './userDevice';
 import { appLogger } from '../utils/logger';
 import { ClientType } from '../constants/clientType';
 import { OAuthClientApp } from '../constants/oauthClientApp';
-import { RegisterAccountType } from '../constants/registerAccountType';
 import { toUserResponse } from './userProfile';
 import {
    RegisterRequest,
@@ -46,7 +45,6 @@ export class AuthService {
          email,
          password,
          role,
-         type = RegisterAccountType.USER,
          firstName,
          lastName,
          address,
@@ -54,8 +52,8 @@ export class AuthService {
          avatar,
          profileImage,
       } = data;
-      const userType = type === RegisterAccountType.AUTHOR ? UserType.AUTHOR : UserType.USER;
-      const userRole = type === RegisterAccountType.AUTHOR ? Role.AUTHOR : (role ?? Role.USER);
+      const userRole = role ?? Role.LISTENER;
+      const isAuthor = userRole === Role.AUTHOR;
 
       // Check if user already exists
       const existingUser = await prisma.user.findUnique({
@@ -75,12 +73,11 @@ export class AuthService {
             email: email.toLowerCase(),
             password: hashedPassword,
             role: userRole,
-            type: userType,
             emailVerified: false,
          },
       });
 
-      if (userType === UserType.AUTHOR) {
+      if (isAuthor) {
          await redisService.setPendingAuthorRegistration(user.id, {
             firstName: firstName!,
             lastName: lastName!,
@@ -101,7 +98,7 @@ export class AuthService {
       try {
          await otpService.createOTP(user.id, OtpPurpose.REGISTRATION, user.email);
       } catch (error) {
-         if (userType === UserType.AUTHOR) {
+         if (isAuthor) {
             await redisService.deletePendingAuthorRegistration(user.id);
          } else {
             await redisService.deletePendingUserRegistration(user.id);
@@ -175,7 +172,7 @@ export class AuthService {
       // Verify OTP
       await otpService.verifyOTP(user.id, otp, OtpPurpose.REGISTRATION);
 
-      if (user.type === UserType.AUTHOR) {
+      if (user.role === Role.AUTHOR) {
          const pendingAuthor = await redisService.getPendingAuthorRegistration(user.id);
          if (!pendingAuthor) {
             throw new Error('Author registration data expired, please register again');
@@ -655,7 +652,7 @@ export class AuthService {
                email: googleUser.email,
                password: null, // OAuth users don't have passwords
                googleId: googleUser.googleId,
-               role: Role.USER,
+               role: Role.LISTENER,
                emailVerified: googleUser.emailVerified, // Auto-verify since Google verified it
                ...(firstName !== undefined ? { firstName } : {}),
                ...(lastName !== undefined ? { lastName } : {}),
@@ -695,8 +692,8 @@ export class AuthService {
     */
    private assertAppAccess(user: User, app?: string): void {
       if (app === OAuthClientApp.PARTNER) {
-         if (user.role !== Role.ADMIN && user.role !== Role.AUTHOR) {
-            throw new Error('Access denied. Admin or author role required.');
+         if (user.role !== Role.GLOBAL_ADMIN && user.role !== Role.AUTHOR) {
+            throw new Error('Access denied. Global admin or author role required.');
          }
       }
    }

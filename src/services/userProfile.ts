@@ -67,7 +67,6 @@ export function toUserResponse(user: {
    id: string;
    email: string;
    role: UserResponse['role'];
-   type: UserResponse['type'];
    emailVerified: boolean;
    firstName: string | null;
    lastName: string | null;
@@ -83,7 +82,6 @@ export function toUserResponse(user: {
       id: user.id,
       email: user.email,
       role: user.role,
-      type: user.type,
       emailVerified: user.emailVerified,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,

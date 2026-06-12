@@ -76,9 +76,9 @@ describe('UserDeviceService', () => {
    describe('resolveDeviceForAuth', () => {
       const device = { deviceId: 'client-device-1' };
 
-      it('skips enforcement for ADMIN', async () => {
+      it('skips enforcement for GLOBAL_ADMIN', async () => {
          await expect(
-            service.resolveDeviceForAuth('admin-1', Role.ADMIN, device),
+            service.resolveDeviceForAuth('admin-1', Role.GLOBAL_ADMIN, device),
          ).resolves.toBeNull();
          expect(mockPrisma.userDevice.findUnique).not.toHaveBeenCalled();
       });
@@ -96,7 +96,7 @@ describe('UserDeviceService', () => {
          mockPrisma.userDevice.findUnique.mockResolvedValue(existing);
          mockPrisma.userDevice.update.mockResolvedValue({ ...existing, lastSeenAt: new Date() });
 
-         await service.resolveDeviceForAuth('user-1', Role.USER, device);
+         await service.resolveDeviceForAuth('user-1', Role.LISTENER, device);
          expect(mockPrisma.userDevice.update).toHaveBeenCalled();
          expect(mockPrisma.userDevice.create).not.toHaveBeenCalled();
       });
@@ -116,7 +116,7 @@ describe('UserDeviceService', () => {
          ]);
 
          await expect(
-            service.resolveDeviceForAuth('user-1', Role.USER, { deviceId: 'new-device' }),
+            service.resolveDeviceForAuth('user-1', Role.LISTENER, { deviceId: 'new-device' }),
          ).rejects.toMatchObject({
             code: 'DEVICE_LIMIT_EXCEEDED',
             statusCode: 403,
@@ -139,7 +139,7 @@ describe('UserDeviceService', () => {
             createdAt: new Date(),
          });
 
-         await service.resolveDeviceForAuth('user-1', Role.USER, { deviceId: 'new-device' });
+         await service.resolveDeviceForAuth('user-1', Role.LISTENER, { deviceId: 'new-device' });
          expect(mockPrisma.userDevice.create).toHaveBeenCalled();
       });
 
@@ -155,7 +155,7 @@ describe('UserDeviceService', () => {
          ]);
 
          await expect(
-            service.resolveDeviceForAuth('user-1', Role.USER, { deviceId: 'd3' }),
+            service.resolveDeviceForAuth('user-1', Role.LISTENER, { deviceId: 'd3' }),
          ).rejects.toBeInstanceOf(AuthError);
       });
    });
