@@ -79,7 +79,7 @@ export class UserDeviceService {
       device: DeviceContext,
       meta?: DeviceRequestMeta,
    ): Promise<UserDevice | null> {
-      if (role === Role.ADMIN) {
+      if (role === Role.GLOBAL_ADMIN) {
          return null;
       }
 

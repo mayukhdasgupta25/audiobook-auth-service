@@ -121,8 +121,7 @@ describe('AuthController', () => {
          expect(authService.register).toHaveBeenCalledWith({
             email: 'test@example.com',
             password: validPassword,
-            role: 'USER',
-            type: 'USER',
+            role: 'LISTENER',
             address: '456 Oak Ave',
             contact: '+919123456789',
          });

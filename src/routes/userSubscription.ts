@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { authenticateToken, requireAdmin } from '../middleware';
+import { authenticateToken, requireGlobalAdmin } from '../middleware';
 import { UserSubscriptionController } from '../controllers/UserSubscriptionController';
 import {
    validatePagination,
@@ -21,7 +21,7 @@ router.get('/me', controller.getMySubscription);
 router.get('/me/history', validatePagination, controller.getMySubscriptionHistory);
 router.get('/me/tier', controller.getMyTier);
 router.get('/user/:userId', validateUserIdParam, validatePagination, controller.getSubscriptionsByUser);
-router.get('/', requireAdmin, validatePagination, controller.getAllSubscriptions);
+router.get('/', requireGlobalAdmin, validatePagination, controller.getAllSubscriptions);
 router.post('/', validateCreateSubscription, controller.createSubscription);
 router.post('/:id/cancel', validateCuidParam('id'), validateCancelBody, controller.cancelSubscription);
 router.post('/:id/renew', validateCuidParam('id'), controller.renewSubscription);
@@ -29,6 +29,6 @@ router.post('/:id/change-plan', validateCuidParam('id'), validateChangePlan, con
 router.delete('/:id/pending-change', validateCuidParam('id'), controller.cancelPendingPlanChange);
 router.get('/:id', validateCuidParam('id'), controller.getSubscriptionById);
 router.put('/:id', validateCuidParam('id'), validateUpdateSubscription, controller.updateSubscription);
-router.delete('/:id', requireAdmin, validateCuidParam('id'), controller.deleteSubscription);
+router.delete('/:id', requireGlobalAdmin, validateCuidParam('id'), controller.deleteSubscription);
 
 export default router;

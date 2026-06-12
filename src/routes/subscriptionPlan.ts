@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { authenticateToken, requireAdmin } from '../middleware';
+import { authenticateToken, requireGlobalAdmin } from '../middleware';
 import { SubscriptionPlanController } from '../controllers/SubscriptionPlanController';
 import {
    validatePagination,
@@ -16,8 +16,8 @@ const router = Router();
 router.use(authenticateToken);
 router.get('/', validatePagination, controller.getAllPlans);
 router.get('/:id', validateCuidParam('id'), controller.getPlanById);
-router.post('/', requireAdmin, validateCreatePlan, controller.createPlan);
-router.put('/:id', requireAdmin, validateCuidParam('id'), validateUpdatePlan, controller.updatePlan);
-router.delete('/:id', requireAdmin, validateCuidParam('id'), controller.deletePlan);
+router.post('/', requireGlobalAdmin, validateCreatePlan, controller.createPlan);
+router.put('/:id', requireGlobalAdmin, validateCuidParam('id'), validateUpdatePlan, controller.updatePlan);
+router.delete('/:id', requireGlobalAdmin, validateCuidParam('id'), controller.deletePlan);
 
 export default router;

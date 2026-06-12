@@ -4,7 +4,7 @@ import { jwksController } from '../controllers/jwks';
 import userDeviceRoutes from './userDevice';
 import {
    authenticateToken,
-   requireAdmin,
+   requireGlobalAdmin,
    loginRateLimit,
    passwordResetRateLimit,
    registerRateLimit,
@@ -59,7 +59,7 @@ router.post('/verify-email-update-otp', authenticateToken, authController.verify
 router.post('/update-email', authenticateToken, authController.updateEmail.bind(authController));
 
 // Admin only routes
-router.post('/revoke', authenticateToken, requireAdmin, authController.revokeToken.bind(authController));
-router.post('/emergency-revoke', authenticateToken, requireAdmin, authController.emergencyRevoke.bind(authController));
+router.post('/revoke', authenticateToken, requireGlobalAdmin, authController.revokeToken.bind(authController));
+router.post('/emergency-revoke', authenticateToken, requireGlobalAdmin, authController.emergencyRevoke.bind(authController));
 
 export default router;

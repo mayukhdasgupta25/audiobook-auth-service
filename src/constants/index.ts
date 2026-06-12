@@ -2,13 +2,14 @@ export {
    AuthRole,
    AuthRoleGroups,
    isGlobalAdminRole,
+   isGlobalAuthorRole,
+   isOrgAdminRole,
+   isOrgCoordinatorRole,
+   isStaffRole,
    normalizeAuthRole,
 } from './authRoles';
 
 export type { AuthRoleValue } from './authRoles';
-
-export { RegisterAccountType, RegisterAccountTypeValues } from './registerAccountType';
-export type { RegisterAccountTypeValue } from './registerAccountType';
 
 export { ClientType } from './clientType';
 export type { ClientTypeValue } from './clientType';

@@ -94,7 +94,13 @@ jest.mock('@prisma/client', () => {
             update: jest.fn(),
          },
       })),
-      Role: { USER: 'USER', ADMIN: 'ADMIN', AUTHOR: 'AUTHOR' },
+      Role: {
+         LISTENER: 'LISTENER',
+         GLOBAL_ADMIN: 'GLOBAL_ADMIN',
+         ORG_ADMIN: 'ORG_ADMIN',
+         ORG_COORDINATOR: 'ORG_COORDINATOR',
+         AUTHOR: 'AUTHOR',
+      },
       BillingInterval: {
          MONTHLY: 'MONTHLY',
          QUARTERLY: 'QUARTERLY',

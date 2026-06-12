@@ -1,6 +1,5 @@
-import { User, Role, UserType, OtpPurpose, EmailType, Gender } from '@prisma/client';
+import { User, Role, OtpPurpose, EmailType, Gender } from '@prisma/client';
 import { ClientTypeValue } from '../constants/clientType';
-import { RegisterAccountTypeValue } from '../constants/registerAccountType';
 
 // JWT Payload interface
 export interface JWTPayload {
@@ -40,7 +39,6 @@ export interface RegisterRequest {
    password: string;
    confirmPassword?: string;
    role?: Role;
-   type?: RegisterAccountTypeValue;
    firstName?: string;
    lastName?: string;
    address?: string;
@@ -140,7 +138,6 @@ export interface UserResponse {
    id: string;
    email: string;
    role: Role;
-   type: UserType;
    emailVerified: boolean;
    firstName?: string;
    lastName?: string;
@@ -254,7 +251,7 @@ export interface PasswordResetData {
 }
 
 // OTP interfaces
-export { OtpPurpose, EmailType, UserType };
+export { OtpPurpose, EmailType };
 
 export interface VerifyOTPRequest {
    email: string;

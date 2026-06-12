@@ -79,9 +79,12 @@ export const requireRole = (roles: string[]) => {
 };
 
 /**
- * Admin only middleware
+ * Global admin only middleware
  */
-export const requireAdmin = requireRole([...AuthRoleGroups.ADMIN_ONLY]);
+export const requireGlobalAdmin = requireRole([...AuthRoleGroups.GLOBAL_ADMIN_ONLY]);
+
+/** @deprecated Use requireGlobalAdmin */
+export const requireAdmin = requireGlobalAdmin;
 
 /**
  * Rate limiting middleware for login attempts

@@ -17,8 +17,7 @@ describe('validateRegisterRequest', () => {
       expect(result).toEqual({
          email: 'user@example.com',
          password: VALID_PASSWORD,
-         role: Role.USER,
-         type: 'USER',
+         role: Role.LISTENER,
          address: '456 Oak Ave',
          contact: '+919876543210',
       });
@@ -36,7 +35,7 @@ describe('validateRegisterRequest', () => {
    test('should validate and normalize author registration from multipart', () => {
       const result = validateRegisterRequest(
          {
-            type: 'AUTHOR',
+            role: Role.AUTHOR,
             email: 'author@example.com',
             password: VALID_PASSWORD,
             confirmPassword: VALID_PASSWORD,
@@ -53,7 +52,6 @@ describe('validateRegisterRequest', () => {
          email: 'author@example.com',
          password: VALID_PASSWORD,
          role: Role.AUTHOR,
-         type: 'AUTHOR',
          firstName: 'Jane',
          lastName: 'Doe',
          address: '123 Main St',
@@ -62,29 +60,24 @@ describe('validateRegisterRequest', () => {
       });
    });
 
-   test('should force AUTHOR role for author registration', () => {
-      const result = validateRegisterRequest(
-         {
-            type: 'AUTHOR',
-            email: 'author@example.com',
+   test('should reject staff roles on public registration', () => {
+      expect(() =>
+         validateRegisterRequest({
+            role: Role.GLOBAL_ADMIN,
+            email: 'admin@example.com',
             password: VALID_PASSWORD,
             confirmPassword: VALID_PASSWORD,
-            role: Role.ADMIN,
-            firstName: 'Jane',
-            lastName: 'Doe',
             address: '123 Main St',
-         },
-         { isMultipart: true },
-      );
-
-      expect(result.role).toBe(Role.AUTHOR);
+            contact: '9876543210',
+         }),
+      ).toThrow(ValidationError);
    });
 
    test('should reject author registration without required fields', () => {
       expect(() =>
          validateRegisterRequest(
             {
-               type: 'AUTHOR',
+               role: Role.AUTHOR,
                email: 'author@example.com',
                password: VALID_PASSWORD,
                confirmPassword: VALID_PASSWORD,
@@ -98,7 +91,7 @@ describe('validateRegisterRequest', () => {
    test('should reject JSON author registration', () => {
       expect(() =>
          validateRegisterRequest({
-            type: 'AUTHOR',
+            role: Role.AUTHOR,
             email: 'author@example.com',
             password: VALID_PASSWORD,
             confirmPassword: VALID_PASSWORD,

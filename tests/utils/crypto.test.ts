@@ -82,7 +82,7 @@ describe('JWTUtils', () => {
          const payload = {
             sub: 'user123',
             email: 'test@example.com',
-            role: 'USER' as Role,
+            role: 'LISTENER' as Role,
          };
 
          const token = JWTUtils.generateAccessToken(payload);
@@ -95,7 +95,7 @@ describe('JWTUtils', () => {
          const payload = {
             sub: 'user123',
             email: 'test@example.com',
-            role: 'USER' as Role,
+            role: 'LISTENER' as Role,
          };
 
          const token = JWTUtils.generateAccessToken(payload);
@@ -115,7 +115,7 @@ describe('JWTUtils', () => {
          const payload = {
             sub: 'user123',
             email: 'test@example.com',
-            role: 'USER' as Role,
+            role: 'LISTENER' as Role,
          };
 
          const token1 = JWTUtils.generateAccessToken(payload);
@@ -128,7 +128,7 @@ describe('JWTUtils', () => {
          const payload = {
             sub: 'user123',
             email: 'test@example.com',
-            role: 'USER' as Role,
+            role: 'LISTENER' as Role,
          };
 
          const token1 = JWTUtils.generateAccessToken(payload);
@@ -150,7 +150,7 @@ describe('JWTUtils', () => {
          const payload = {
             sub: 'user123',
             email: 'test@example.com',
-            role: 'USER' as Role,
+            role: 'LISTENER' as Role,
          };
 
          const token = JWTUtils.generateAccessToken(payload);

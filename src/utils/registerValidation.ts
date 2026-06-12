@@ -1,8 +1,10 @@
 import { Role } from '@prisma/client';
 import { RegisterRequest, ValidationError } from '../types';
-import { RegisterAccountType } from '../constants/registerAccountType';
+import { isStaffRole } from '../constants/authRoles';
 import { validateRegistrationPassword } from './passwordValidation';
 import { validateIndianContact } from './phoneValidation';
+
+const PUBLIC_REGISTER_ROLES = new Set<Role>([Role.LISTENER, Role.AUTHOR]);
 
 function resolveContactField(
    contact: unknown,
@@ -40,7 +42,6 @@ export function validateRegisterRequest(
    const {
       email,
       password,
-      type = RegisterAccountType.USER,
       firstName,
       lastName,
       address,
@@ -48,6 +49,8 @@ export function validateRegisterRequest(
       avatar,
       profileImage,
    } = body;
+
+   const role = body.role ?? (isMultipart ? Role.AUTHOR : Role.LISTENER);
 
    if (!email || typeof email !== 'string') {
       throw new ValidationError('Email is required', { email: ['Email is required'] });
@@ -62,23 +65,31 @@ export function validateRegisterRequest(
       throw new ValidationError('Invalid password', passwordValidationErrors);
    }
 
-   if (type !== RegisterAccountType.USER && type !== RegisterAccountType.AUTHOR) {
-      throw new ValidationError('Invalid user type', { type: ['Type must be USER or AUTHOR'] });
-   }
-
-   if (isMultipart && type !== RegisterAccountType.AUTHOR) {
-      throw new ValidationError('User registration requires application/json', {
-         type: ['USER registration must use application/json, not multipart/form-data'],
+   if (!PUBLIC_REGISTER_ROLES.has(role)) {
+      throw new ValidationError('Invalid role', {
+         role: ['Role must be LISTENER or AUTHOR for registration'],
       });
    }
 
-   if (!isMultipart && type === RegisterAccountType.AUTHOR) {
+   if (isStaffRole(role)) {
+      throw new ValidationError('Invalid role', {
+         role: ['Staff roles cannot be assigned during registration'],
+      });
+   }
+
+   if (isMultipart && role !== Role.AUTHOR) {
       throw new ValidationError('Author registration requires multipart/form-data', {
-         type: ['AUTHOR registration must use multipart/form-data with type=AUTHOR'],
+         role: ['AUTHOR registration must use multipart/form-data with role=AUTHOR'],
       });
    }
 
-   if (type === RegisterAccountType.AUTHOR) {
+   if (!isMultipart && role === Role.AUTHOR) {
+      throw new ValidationError('Author registration requires multipart/form-data', {
+         role: ['AUTHOR registration must use multipart/form-data with role=AUTHOR'],
+      });
+   }
+
+   if (role === Role.AUTHOR) {
       const details: Record<string, string[]> = {};
 
       if (!firstName || typeof firstName !== 'string' || firstName.trim().length === 0) {
@@ -106,7 +117,6 @@ export function validateRegisterRequest(
          email,
          password,
          role: Role.AUTHOR,
-         type: RegisterAccountType.AUTHOR,
          firstName: firstName!.trim(),
          lastName: lastName!.trim(),
          address: address!.trim(),
@@ -138,8 +148,7 @@ export function validateRegisterRequest(
    const normalizedUser: RegisterRequest = {
       email,
       password,
-      role: body.role ?? Role.USER,
-      type: RegisterAccountType.USER,
+      role: Role.LISTENER,
       address: address!.trim(),
       contact: normalizedContact!,
    };
