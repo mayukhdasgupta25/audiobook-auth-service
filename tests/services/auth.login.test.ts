@@ -118,7 +118,7 @@ describe('AuthService login app access', () => {
             app: 'partner',
             device: { deviceId: 'device-1' },
          }),
-      ).rejects.toThrow('Access denied. Admin or author role required.');
+      ).rejects.toThrow('Access denied. Global admin or author role required.');
    });
 
 });

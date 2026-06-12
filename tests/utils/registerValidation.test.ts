@@ -190,7 +190,7 @@ describe('validateRegisterRequest', () => {
       try {
          validateRegisterRequest(
             {
-               type: 'AUTHOR',
+               role: Role.AUTHOR,
                email: 'author@example.com',
                password: VALID_PASSWORD,
                confirmPassword: VALID_PASSWORD,
