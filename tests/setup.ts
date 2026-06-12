@@ -139,6 +139,16 @@ jest.mock('@prisma/client', () => {
          PASSWORD_RESET: 'PASSWORD_RESET',
          DEVICE_REMOVAL: 'DEVICE_REMOVAL',
       },
+      OrganizationRole: {
+         OWNER: 'OWNER',
+         ADMIN: 'ADMIN',
+      },
+      OrganizationTeamSize: {
+         SIZE_1_10: 'SIZE_1_10',
+         SIZE_11_50: 'SIZE_11_50',
+         SIZE_51_200: 'SIZE_51_200',
+         SIZE_200_PLUS: 'SIZE_200_PLUS',
+      },
    };
 });
 
