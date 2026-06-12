@@ -24,6 +24,7 @@ import { rabbitmqService } from './services/rabbitmq';
 import { getDependencyHealth, isDependencyHealthOk } from './services/health';
 import { requireHealthSupportAuth } from './middleware/healthSupportAuth';
 import { appLogger } from './utils/logger';
+import { setupSwagger } from './config/swagger';
 
 /**
  * Create and configure Express application
@@ -79,11 +80,15 @@ export const createApp = (): express.Application => {
    app.use('/auth/authors', authenticateToken, createAuthorRoutes(prisma));
    app.use('/auth/catalog', authenticateToken, createCatalogRoutes(prisma));
 
+   setupSwagger(app);
+
    // Root endpoint
    app.get('/', (_req, res) => {
       res.json({
          message: 'Auth Service API',
          version: '1.0.0',
+         apiDocs: '/api-docs',
+         openApiSpec: '/api-docs.json',
          endpoints: {
             health: '/api/auth/health',
             auth: '/auth',
@@ -93,6 +98,7 @@ export const createApp = (): express.Application => {
             devices: '/auth/devices',
             organizations: '/auth/organizations',
             authors: '/auth/authors',
+            catalog: '/auth/catalog',
          },
       });
    });
@@ -166,6 +172,7 @@ export const startServer = async (): Promise<void> => {
       const port = config.PORT;
       app.listen(port, () => {
          appLogger.info({ port, nodeEnv: config.NODE_ENV }, 'Auth service running');
+         appLogger.info({ swaggerUI: `http://localhost:${port}/api-docs`, openAPISpec: `http://localhost:${port}/api-docs.json` }, 'API documentation');
          const jwksPath = '/auth/.well-known/jwks.json';
          if (config.NODE_ENV === 'development' || config.NODE_ENV === 'test' || config.NODE_ENV === 'testing') {
             appLogger.info({ jwksUrl: `http://localhost:${port}${jwksPath}` }, 'JWKS endpoint');

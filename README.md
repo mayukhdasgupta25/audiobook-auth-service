@@ -17,6 +17,15 @@ A secure authentication service built with Node.js, Express, TypeScript, and Pri
 - **TypeScript**: Full type safety throughout the application
 - **Subscriptions**: Plan catalog and per-user subscriptions; see [docs/SUBSCRIPTIONS.md](./docs/SUBSCRIPTIONS.md)
 
+## API documentation
+
+When the service is running:
+
+- **Swagger UI**: `http://localhost:{PORT}/api-docs` — interactive API documentation
+- **OpenAPI spec**: `http://localhost:{PORT}/api-docs.json` — machine-readable specification
+
+The root `GET /` response also lists `apiDocs` and `openApiSpec` paths.
+
 ## Architecture
 
 ```
@@ -646,7 +655,7 @@ The service includes:
 - Request logging with response times
 - Error logging with stack traces
 - Security event logging (token revocation, failed logins)
-- Health check at `GET /health` (database, Redis, RabbitMQ); returns `503` when any dependency is down
+- Health check at `GET /api/auth/health` (database, Redis, RabbitMQ); returns `503` when any dependency is down
 
 ## Deployment
 
