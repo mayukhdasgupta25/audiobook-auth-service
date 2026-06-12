@@ -6,7 +6,8 @@ import { StorageFactory } from './storage/StorageFactory';
 
 export type ImageKeyDirectory =
    | 'uploads/images/users'
-   | 'uploads/images/authors';
+   | 'uploads/images/authors'
+   | 'uploads/images/organizations';
 
 export class FileUrlService {
    shouldSignUrls(): boolean {
@@ -126,6 +127,18 @@ export class FileUrlService {
       }
 
       return storedKey;
+   }
+
+   async resolveOrganizationMedia<T extends { image?: string | null }>(dto: T): Promise<T> {
+      const image = await this.resolveForClient(dto.image);
+      return {
+         ...dto,
+         image: image ?? dto.image ?? null,
+      };
+   }
+
+   async resolveOrganizationMediaList<T extends { image?: string | null }>(dtos: T[]): Promise<T[]> {
+      return Promise.all(dtos.map((dto) => this.resolveOrganizationMedia(dto)));
    }
 }
 

@@ -67,12 +67,8 @@ export interface UserCreatedEvent {
 }
 
 export interface AuthorCreatedEvent {
-   userId: string;
-   firstName: string;
-   lastName: string;
-   address: string;
-   contact?: string;
-   profileImage?: string;
+   authorId: string;
+   avatar?: string;
 }
 
 export interface DeviceContext {
@@ -91,6 +87,7 @@ export interface LoginRequest {
    password: string;
    clientType?: ClientTypeValue;
    app?: string;
+   slug?: string;
    device: DeviceContext;
 }
 
@@ -126,6 +123,7 @@ export interface GoogleOAuthRequest {
 export interface AuthResponse {
    accessToken: string;
    refreshToken?: string; // Only for mobile clients
+   appType?: 'organization' | 'author';
    user: {
       id: string;
       email: string;

@@ -145,6 +145,7 @@ export const config = {
    DEV_UPLOAD_DIR: nodeEnv === "development" ? "./src/uploads" : "./uploads",
    DEV_USER_AVATAR_DIR: nodeEnv === "development" ? "./src/uploads/images/users" : "./uploads/images/users",
    DEV_AUTHOR_IMAGE_DIR: nodeEnv === "development" ? "./src/uploads/images/authors" : "./uploads/images/authors",
+   DEV_ORG_IMAGE_DIR: nodeEnv === "development" ? "./src/uploads/images/organizations" : "./uploads/images/organizations",
 
    AWS_S3_BUCKET: requireEnv("AWS_S3_BUCKET"),
    AWS_S3_REGION: requireEnv("AWS_S3_REGION"),

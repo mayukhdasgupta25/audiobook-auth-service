@@ -8,7 +8,9 @@ import { userDeviceService } from './userDevice';
 import { appLogger } from '../utils/logger';
 import { ClientType } from '../constants/clientType';
 import { OAuthClientApp } from '../constants/oauthClientApp';
-import { isPartnerAppRole } from '../constants/authRoles';
+import { isPartnerAppRole, isOrgAdminRole, isOrgCoordinatorRole, isGlobalAuthorRole } from '../constants/authRoles';
+import { AuthorService } from './AuthorService';
+import { OrganizationService } from './OrganizationService';
 import { toUserResponse } from './userProfile';
 import {
    RegisterRequest,
@@ -153,7 +155,9 @@ export class AuthService {
 
       this.assertAppAccess(user, app);
 
-      return this.issueAuthTokens(user, data.device, data.meta);
+      const appType = await this.resolveLoginAppType(user, data.slug);
+
+      return this.issueAuthTokens(user, data.device, data.meta, appType);
    }
 
    /**
@@ -194,16 +198,21 @@ export class AuthService {
             },
          });
 
+         const authorService = new AuthorService(prisma);
+         const author = await authorService.createAuthorForUser(
+            updatedUser.id,
+            pendingAuthor.firstName,
+            pendingAuthor.lastName,
+         );
+
          const authResponse = await this.issueAuthTokens(updatedUser, data.device, data.meta);
 
          try {
             await rabbitmqService.publishAuthorCreated({
-               userId: updatedUser.id,
-               firstName: pendingAuthor.firstName,
-               lastName: pendingAuthor.lastName,
-               address: pendingAuthor.address,
-               ...(pendingAuthor.contact !== undefined ? { contact: pendingAuthor.contact } : {}),
-               ...(pendingAuthor.profileImage !== undefined ? { profileImage: pendingAuthor.profileImage } : {}),
+               authorId: author.id,
+               ...(pendingAuthor.profileImage !== undefined
+                  ? { avatar: pendingAuthor.profileImage }
+                  : {}),
             });
          } catch (error) {
             appLogger.error({ err: error }, 'Failed to publish author created event');
@@ -702,6 +711,40 @@ export class AuthService {
       }
    }
 
+   private async resolveLoginAppType(
+      user: User,
+      slug?: string,
+   ): Promise<'organization' | 'author' | undefined> {
+      if (!slug || slug.trim().length === 0) {
+         return undefined;
+      }
+
+      const trimmedSlug = slug.trim();
+      const organizationService = new OrganizationService(prisma);
+      const authorService = new AuthorService(prisma);
+
+      if (isOrgAdminRole(user.role) || isOrgCoordinatorRole(user.role)) {
+         const isMember = await organizationService.isUserMemberOfOrganizationBySlug(
+            user.id,
+            trimmedSlug,
+         );
+         if (!isMember) {
+            throw new Error('You are not a member of this organization');
+         }
+         return 'organization';
+      }
+
+      if (isGlobalAuthorRole(user.role)) {
+         const author = await authorService.getAuthorBySlug(trimmedSlug);
+         if (!author || author.userId !== user.id) {
+            throw new Error('Invalid author credentials');
+         }
+         return 'author';
+      }
+
+      throw new Error('Invalid login slug for this account type');
+   }
+
    /**
     * Resolve device, issue access + refresh tokens, persist refresh token.
     */
@@ -709,6 +752,7 @@ export class AuthService {
       user: User,
       device?: DeviceContext,
       meta?: DeviceRequestMeta,
+      appType?: 'organization' | 'author',
    ): Promise<AuthResponse> {
       const userDevice = device
          ? await userDeviceService.resolveDeviceForAuth(
@@ -737,6 +781,7 @@ export class AuthService {
       return {
          accessToken,
          refreshToken,
+         ...(appType !== undefined ? { appType } : {}),
          user: {
             id: user.id,
             email: user.email,

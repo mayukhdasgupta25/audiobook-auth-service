@@ -23,6 +23,16 @@ jest.mock('@prisma/client', () => ({
    OtpPurpose: {
       REGISTRATION: 'REGISTRATION',
    },
+   OrganizationRole: {
+      OWNER: 'OWNER',
+      ADMIN: 'ADMIN',
+   },
+   OrganizationTeamSize: {
+      SIZE_1_10: 'SIZE_1_10',
+      SIZE_11_50: 'SIZE_11_50',
+      SIZE_51_200: 'SIZE_51_200',
+      SIZE_200_PLUS: 'SIZE_200_PLUS',
+   },
 }));
 
 jest.mock('../../src/utils/crypto', () => ({
@@ -67,6 +77,16 @@ jest.mock('../../src/services/userDevice', () => ({
    userDeviceService: {
       resolveDeviceForAuth: jest.fn().mockResolvedValue({ id: 'device-1' }),
    },
+}));
+
+jest.mock('../../src/services/AuthorService', () => ({
+   AuthorService: jest.fn().mockImplementation(() => ({
+      createAuthorForUser: jest.fn().mockResolvedValue({
+         id: 'author-1',
+         userId: 'author-user-1',
+         slug: 'jane-doe-abc12345',
+      }),
+   })),
 }));
 
 jest.mock('../../src/services/google-oauth', () => ({
@@ -176,12 +196,8 @@ describe('AuthService register/verify author flow', () => {
       });
 
       expect(rabbitmqService.publishAuthorCreated).toHaveBeenCalledWith({
-         userId: 'author-user-1',
-         firstName: 'Jane',
-         lastName: 'Doe',
-         address: '123 Main St',
-         contact: '+919876543210',
-         profileImage: '/uploads/images/authors/image-1.jpg',
+         authorId: 'author-1',
+         avatar: '/uploads/images/authors/image-1.jpg',
       });
       expect(rabbitmqService.publishUserCreated).not.toHaveBeenCalled();
       expect(redisService.deletePendingAuthorRegistration).toHaveBeenCalledWith('author-user-1');

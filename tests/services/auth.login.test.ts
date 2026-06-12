@@ -19,6 +19,16 @@ jest.mock('@prisma/client', () => ({
       AUTHOR: 'AUTHOR',
    },
    OtpPurpose: { REGISTRATION: 'REGISTRATION' },
+   OrganizationRole: {
+      OWNER: 'OWNER',
+      ADMIN: 'ADMIN',
+   },
+   OrganizationTeamSize: {
+      SIZE_1_10: 'SIZE_1_10',
+      SIZE_11_50: 'SIZE_11_50',
+      SIZE_51_200: 'SIZE_51_200',
+      SIZE_200_PLUS: 'SIZE_200_PLUS',
+   },
 }));
 
 jest.mock('../../src/utils/crypto', () => ({

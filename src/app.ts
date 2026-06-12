@@ -3,16 +3,20 @@ import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import path from 'path';
+import { PrismaClient } from '@prisma/client';
 import { config } from './config/env';
 import authRoutes from './routes/auth';
 import subscriptionPlanRoutes from './routes/subscriptionPlan';
 import userSubscriptionRoutes from './routes/userSubscription';
+import { createOrganizationRoutes } from './routes/organizationRoutes';
+import { createAuthorRoutes } from './routes/authorRoutes';
 import {
    errorHandler,
    notFound,
    requestLogger,
    corsOptions,
-   securityHeaders
+   securityHeaders,
+   authenticateToken,
 } from './middleware';
 import { redisService } from './services/redis';
 import { rabbitmqService } from './services/rabbitmq';
@@ -25,6 +29,7 @@ import { appLogger } from './utils/logger';
  */
 export const createApp = (): express.Application => {
    const app = express();
+   const prisma = new PrismaClient();
 
    // Express trust proxy hop count (see TRUST_PROXY in env). Required behind nginx for
    // express-rate-limit (X-Forwarded-For) and secure cookies over HTTPS.
@@ -69,6 +74,8 @@ export const createApp = (): express.Application => {
    app.use('/auth', authRoutes);
    app.use('/auth/subscription-plans', subscriptionPlanRoutes);
    app.use('/auth/subscriptions', userSubscriptionRoutes);
+   app.use('/auth/organizations', authenticateToken, createOrganizationRoutes(prisma));
+   app.use('/auth/authors', authenticateToken, createAuthorRoutes(prisma));
 
    // Root endpoint
    app.get('/', (_req, res) => {
@@ -82,6 +89,8 @@ export const createApp = (): express.Application => {
             subscriptionPlans: '/auth/subscription-plans',
             subscriptions: '/auth/subscriptions',
             devices: '/auth/devices',
+            organizations: '/auth/organizations',
+            authors: '/auth/authors',
          },
       });
    });
