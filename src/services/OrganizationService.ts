@@ -13,6 +13,8 @@ import { DomainError } from '../types/domain';
 import { domainMessages } from '../utils/domainMessages';
 import { fileUrlService } from './FileUrlService';
 import { generateOrganizationSlug } from '../utils/slug';
+import { rabbitmqService } from './rabbitmq';
+import { mediaCleanupService } from './MediaCleanupService';
 import {
    AuthRole,
    isOrgAdminRole,
@@ -257,7 +259,17 @@ export class OrganizationService {
          if (!existing) {
             throw DomainError.notFound(msg.not_found);
          }
+
+         const orgImage = existing.image;
          await this.prisma.organization.delete({ where: { id } });
+
+         try {
+            await rabbitmqService.publishOrganizationDeleted({ organizationId: id });
+         } catch (error) {
+            console.error(`Failed to publish organization.deleted for organization ${id}:`, error);
+         }
+
+         await mediaCleanupService.deleteStoredFile(orgImage);
       } catch (error) {
          if (error instanceof DomainError) {
             throw error;

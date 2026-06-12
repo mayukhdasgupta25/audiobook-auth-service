@@ -9,6 +9,7 @@ import {
 import { DomainError } from '../types/domain';
 import { domainMessages } from '../utils/domainMessages';
 import { generateAuthorSlug } from '../utils/slug';
+import { rabbitmqService } from './rabbitmq';
 
 const msg = domainMessages.error.authors;
 const validationMsg = domainMessages.error.validation;
@@ -255,7 +256,15 @@ export class AuthorService {
          if (!existingAuthor) {
             throw DomainError.notFound(msg.not_found);
          }
+
+         const { userId } = existingAuthor;
          await this.prisma.author.delete({ where: { id } });
+
+         try {
+            await rabbitmqService.publishAuthorDeleted({ authorId: id, userId });
+         } catch (error) {
+            console.error(`Failed to publish author.deleted for author ${id}:`, error);
+         }
       } catch (error) {
          if (error instanceof DomainError) {
             throw error;
