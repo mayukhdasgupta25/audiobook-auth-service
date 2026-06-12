@@ -1,4 +1,4 @@
-import { User, Role, UserType, OtpPurpose, EmailType } from '@prisma/client';
+import { User, Role, UserType, OtpPurpose, EmailType, Gender } from '@prisma/client';
 import { ClientTypeValue } from '../constants/clientType';
 import { RegisterAccountTypeValue } from '../constants/registerAccountType';
 
@@ -65,10 +65,6 @@ export interface PendingAuthorRegistration {
 
 export interface UserCreatedEvent {
    userId: string;
-   firstName?: string;
-   lastName?: string;
-   address?: string;
-   contact?: string;
    avatar?: string;
 }
 
@@ -146,8 +142,30 @@ export interface UserResponse {
    role: Role;
    type: UserType;
    emailVerified: boolean;
+   firstName?: string;
+   lastName?: string;
+   address?: string;
+   contact?: string;
+   gender?: Gender;
+   location?: string;
+   age?: number;
    createdAt: Date;
    updatedAt: Date;
+}
+
+export interface LocationCoordinatesInput {
+   latitude: string | number;
+   longitude: string | number;
+}
+
+export interface UpdateUserProfileRequest {
+   firstName?: string;
+   lastName?: string;
+   address?: string | null;
+   contact?: string | null;
+   gender?: Gender | null;
+   location?: LocationCoordinatesInput | null;
+   age?: number | null;
 }
 
 // Error classes

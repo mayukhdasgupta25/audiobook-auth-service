@@ -9,6 +9,7 @@ import { appLogger } from '../utils/logger';
 import { ClientType } from '../constants/clientType';
 import { OAuthClientApp } from '../constants/oauthClientApp';
 import { RegisterAccountType } from '../constants/registerAccountType';
+import { toUserResponse } from './userProfile';
 import {
    RegisterRequest,
    LoginRequest,
@@ -110,7 +111,7 @@ export class AuthService {
       }
 
       return {
-         user: this.toUserResponse(user),
+         user: toUserResponse(user),
          otpSent: true,
       };
    }
@@ -174,19 +175,24 @@ export class AuthService {
       // Verify OTP
       await otpService.verifyOTP(user.id, otp, OtpPurpose.REGISTRATION);
 
-      // Update emailVerified to true after OTP verification
-      const updatedUser = await prisma.user.update({
-         where: { id: user.id },
-         data: { emailVerified: true },
-      });
-
-      const authResponse = await this.issueAuthTokens(updatedUser, data.device, data.meta);
-
-      if (updatedUser.type === UserType.AUTHOR) {
-         const pendingAuthor = await redisService.getPendingAuthorRegistration(updatedUser.id);
+      if (user.type === UserType.AUTHOR) {
+         const pendingAuthor = await redisService.getPendingAuthorRegistration(user.id);
          if (!pendingAuthor) {
             throw new Error('Author registration data expired, please register again');
          }
+
+         const updatedUser = await prisma.user.update({
+            where: { id: user.id },
+            data: {
+               emailVerified: true,
+               firstName: pendingAuthor.firstName,
+               lastName: pendingAuthor.lastName,
+               address: pendingAuthor.address,
+               ...(pendingAuthor.contact !== undefined ? { contact: pendingAuthor.contact } : {}),
+            },
+         });
+
+         const authResponse = await this.issueAuthTokens(updatedUser, data.device, data.meta);
 
          try {
             await rabbitmqService.publishAuthorCreated({
@@ -202,26 +208,37 @@ export class AuthService {
          } finally {
             await redisService.deletePendingAuthorRegistration(updatedUser.id);
          }
-      } else {
-         const pendingUser = await redisService.getPendingUserRegistration(updatedUser.id);
-         if (!pendingUser) {
-            throw new Error('User registration data expired, please register again');
-         }
 
-         try {
-            await rabbitmqService.publishUserCreated({
-               userId: updatedUser.id,
-               address: pendingUser.address,
-               contact: pendingUser.contact,
-               ...(firstName !== undefined && firstName.trim().length > 0 ? { firstName: firstName.trim() } : {}),
-               ...(lastName !== undefined && lastName.trim().length > 0 ? { lastName: lastName.trim() } : {}),
-               ...(pendingUser.avatar !== undefined ? { avatar: pendingUser.avatar } : {}),
-            });
-         } catch (error) {
-            appLogger.error({ err: error }, 'Failed to publish user created event');
-         } finally {
-            await redisService.deletePendingUserRegistration(updatedUser.id);
-         }
+         return authResponse;
+      }
+
+      const pendingUser = await redisService.getPendingUserRegistration(user.id);
+      if (!pendingUser) {
+         throw new Error('User registration data expired, please register again');
+      }
+
+      const updatedUser = await prisma.user.update({
+         where: { id: user.id },
+         data: {
+            emailVerified: true,
+            address: pendingUser.address,
+            contact: pendingUser.contact,
+            ...(firstName !== undefined && firstName.trim().length > 0 ? { firstName: firstName.trim() } : {}),
+            ...(lastName !== undefined && lastName.trim().length > 0 ? { lastName: lastName.trim() } : {}),
+         },
+      });
+
+      const authResponse = await this.issueAuthTokens(updatedUser, data.device, data.meta);
+
+      try {
+         await rabbitmqService.publishUserCreated({
+            userId: updatedUser.id,
+            ...(pendingUser.avatar !== undefined ? { avatar: pendingUser.avatar } : {}),
+         });
+      } catch (error) {
+         appLogger.error({ err: error }, 'Failed to publish user created event');
+      } finally {
+         await redisService.deletePendingUserRegistration(updatedUser.id);
       }
 
       return authResponse;
@@ -625,6 +642,14 @@ export class AuthService {
       } else {
          // User doesn't exist - signup flow
          // Create new user with auto-verified email (Google already verified it)
+         let firstName: string | undefined;
+         let lastName: string | undefined;
+         if (googleUser.name) {
+            const nameParts = googleUser.name.trim().split(/\s+/);
+            firstName = nameParts[0] || undefined;
+            lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : undefined;
+         }
+
          user = await prisma.user.create({
             data: {
                email: googleUser.email,
@@ -632,25 +657,14 @@ export class AuthService {
                googleId: googleUser.googleId,
                role: Role.USER,
                emailVerified: googleUser.emailVerified, // Auto-verify since Google verified it
+               ...(firstName !== undefined ? { firstName } : {}),
+               ...(lastName !== undefined ? { lastName } : {}),
             },
          });
 
-         // Extract firstName and lastName from Google user's name
-         let firstName: string | undefined;
-         let lastName: string | undefined;
-         if (googleUser.name) {
-            const nameParts = googleUser.name.trim().split(/\s+/);
-            firstName = nameParts[0] || undefined;
-            // All remaining words form the lastName
-            lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : undefined;
-         }
-
-         // Publish user created event to RabbitMQ with firstName and lastName (OAuth users may complete profile later)
          try {
             await rabbitmqService.publishUserCreated({
                userId: user.id,
-               ...(firstName !== undefined ? { firstName } : {}),
-               ...(lastName !== undefined ? { lastName } : {}),
             });
          } catch (error) {
             appLogger.error({ err: error }, 'Failed to publish user created event');
@@ -673,27 +687,7 @@ export class AuthService {
          return null;
       }
 
-      return {
-         id: user.id,
-         email: user.email,
-         role: user.role,
-         type: user.type,
-         emailVerified: user.emailVerified,
-         createdAt: user.createdAt,
-         updatedAt: user.updatedAt,
-      };
-   }
-
-   private toUserResponse(user: User): UserResponse {
-      return {
-         id: user.id,
-         email: user.email,
-         role: user.role,
-         type: user.type,
-         emailVerified: user.emailVerified,
-         createdAt: user.createdAt,
-         updatedAt: user.updatedAt,
-      };
+      return toUserResponse(user);
    }
 
    /**

@@ -54,6 +54,8 @@ process.env['AWS_ACCESS_KEY_ID'] = 'test-access-key';
 process.env['AWS_SECRET_ACCESS_KEY'] = 'test-secret-key';
 process.env['AWS_S3_ENDPOINT'] = 'https://s3.amazonaws.com';
 process.env['AWS_SIGNED_URL_EXPIRES_IN'] = '3600';
+process.env['NOMINATIM_BASE_URL'] = 'https://nominatim.openstreetmap.org';
+process.env['NOMINATIM_USER_AGENT'] = 'SrotaAuthTest/1.0';
 
 // Now safe to import modules that depend on config
 // (No imports needed here - tests can import what they need)

@@ -38,6 +38,14 @@ enum EmailType {
    NOTIFICATION
 }
 
+enum Gender {
+   MALE
+   FEMALE
+   NON_BINARY
+   OTHER
+   PREFER_NOT_TO_SAY
+}
+
 model User {
    id            String   @id @default(uuid())
    email         String   @unique
@@ -46,6 +54,13 @@ model User {
    role          Role     @default(USER)
    type          UserType @default(USER)
    emailVerified Boolean  @default(false)
+   firstName     String?
+   lastName      String?
+   address       String?
+   contact       String?
+   gender        Gender?
+   location      String?
+   age           Int?
    createdAt     DateTime @default(now())
    updatedAt     DateTime @updatedAt
 
