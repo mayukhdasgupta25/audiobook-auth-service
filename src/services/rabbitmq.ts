@@ -131,10 +131,6 @@ export class RabbitMQService {
     */
    async publishUserCreated(data: {
       userId: string;
-      firstName?: string;
-      lastName?: string;
-      address?: string;
-      contact?: string;
       avatar?: string;
    }): Promise<void> {
       if (!this.isServiceConnected()) {
@@ -144,27 +140,11 @@ export class RabbitMQService {
       try {
          const messageData: {
             userId: string;
-            firstName?: string;
-            lastName?: string;
-            address?: string;
-            contact?: string;
             avatar?: string;
          } = {
             userId: data.userId,
          };
 
-         if (data.firstName !== undefined) {
-            messageData.firstName = data.firstName;
-         }
-         if (data.lastName !== undefined) {
-            messageData.lastName = data.lastName;
-         }
-         if (data.address !== undefined) {
-            messageData.address = data.address;
-         }
-         if (data.contact !== undefined) {
-            messageData.contact = data.contact;
-         }
          if (data.avatar !== undefined) {
             messageData.avatar = data.avatar;
          }

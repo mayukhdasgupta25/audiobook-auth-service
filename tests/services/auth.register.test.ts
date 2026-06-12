@@ -254,12 +254,20 @@ describe('AuthService register/verify author flow', () => {
          device: { deviceId: 'device-1' },
       });
 
+      expect(mockPrisma.user.update).toHaveBeenCalledWith(
+         expect.objectContaining({
+            where: { id: 'user-1' },
+            data: expect.objectContaining({
+               emailVerified: true,
+               address: '456 Oak Ave',
+               contact: '+919123456789',
+               firstName: 'John',
+               lastName: 'Doe',
+            }),
+         }),
+      );
       expect(rabbitmqService.publishUserCreated).toHaveBeenCalledWith({
          userId: 'user-1',
-         firstName: 'John',
-         lastName: 'Doe',
-         address: '456 Oak Ave',
-         contact: '+919123456789',
          avatar: 'uploads/images/users/avatar-1.jpg',
       });
       expect(rabbitmqService.publishAuthorCreated).not.toHaveBeenCalled();

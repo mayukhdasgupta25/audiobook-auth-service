@@ -12,6 +12,8 @@ import {
    validateCsrf,
 } from '../middleware';
 import { handleAuthorRegistrationUpload } from '../middleware/RegisterUploadMiddleware';
+import { validateUserProfileUpdate } from '../middleware/profileValidation';
+import { userProfileController } from '../controllers/userProfile';
 
 const router = Router();
 
@@ -46,6 +48,8 @@ router.use('/devices', userDeviceRoutes);
 
 // Protected routes (require authentication)
 router.get('/me', authenticateToken, authController.getMe.bind(authController));
+router.get('/user/profile', authenticateToken, userProfileController.getProfile.bind(userProfileController));
+router.put('/user/profile', authenticateToken, validateUserProfileUpdate, userProfileController.updateProfile.bind(userProfileController));
 router.get('/user/:userId', authenticateToken, authController.getRole.bind(authController));
 router.get('/request-password-change-otp', authenticateToken, authController.requestPasswordChangeOTP.bind(authController));
 router.post('/verify-password-change-otp', authenticateToken, authController.verifyPasswordChangeOTP.bind(authController));

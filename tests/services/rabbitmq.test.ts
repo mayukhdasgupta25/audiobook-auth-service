@@ -133,8 +133,6 @@ describe('RabbitMQService', () => {
       test('should publish user created event', async () => {
          const data = {
             userId: 'user-123',
-            address: '456 Oak Ave',
-            contact: '+919123456789',
          };
          mockChannel.publish.mockReturnValueOnce(true);
 
@@ -151,13 +149,9 @@ describe('RabbitMQService', () => {
          );
       });
 
-      test('should publish user created event with profile fields', async () => {
+      test('should publish user created event with avatar', async () => {
          const data = {
             userId: 'user-123',
-            firstName: 'John',
-            lastName: 'Doe Smith',
-            address: '456 Oak Ave',
-            contact: '+919123456789',
             avatar: 'uploads/images/users/avatar-1.jpg',
          };
          mockChannel.publish.mockReturnValueOnce(true);
@@ -245,8 +239,6 @@ describe('RabbitMQService', () => {
          await expect(
             rabbitmqService.publishUserCreated({
                userId: 'user-123',
-               address: '456 Oak Ave',
-               contact: '+919123456789',
             }),
          ).rejects.toThrow('Failed to publish message to RabbitMQ');
       });
@@ -257,8 +249,6 @@ describe('RabbitMQService', () => {
          await expect(
             rabbitmqService.publishUserCreated({
                userId: 'user-123',
-               address: '456 Oak Ave',
-               contact: '+919123456789',
             }),
          ).rejects.toThrow('RabbitMQ service is not connected');
       });
