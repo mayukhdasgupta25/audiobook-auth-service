@@ -239,8 +239,6 @@ describe('RabbitMQService', () => {
          await expect(
             rabbitmqService.publishUserCreated({
                userId: 'user-123',
-               address: '456 Oak Ave',
-               contact: '+919123456789',
             }),
          ).rejects.toThrow('Failed to publish message to RabbitMQ');
       });
@@ -251,8 +249,6 @@ describe('RabbitMQService', () => {
          await expect(
             rabbitmqService.publishUserCreated({
                userId: 'user-123',
-               address: '456 Oak Ave',
-               contact: '+919123456789',
             }),
          ).rejects.toThrow('RabbitMQ service is not connected');
       });
