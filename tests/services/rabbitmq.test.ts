@@ -149,10 +149,9 @@ describe('RabbitMQService', () => {
          );
       });
 
-      test('should publish user created event with avatar', async () => {
+      test('should publish user created event with userId only', async () => {
          const data = {
             userId: 'user-123',
-            avatar: 'uploads/images/users/avatar-1.jpg',
          };
          mockChannel.publish.mockReturnValueOnce(true);
 
@@ -161,7 +160,7 @@ describe('RabbitMQService', () => {
          expect(mockChannel.publish).toHaveBeenCalledWith(
             config.RABBITMQ_EXCHANGE,
             'user.created',
-            Buffer.from(JSON.stringify(data)),
+            Buffer.from(JSON.stringify({ userId: 'user-123' })),
             expect.objectContaining({
                persistent: true,
                timestamp: expect.any(Number),

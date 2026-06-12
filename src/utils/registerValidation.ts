@@ -1,10 +1,18 @@
 import { Role } from '@prisma/client';
 import { RegisterRequest, ValidationError } from '../types';
-import { isStaffRole } from '../constants/authRoles';
 import { validateRegistrationPassword } from './passwordValidation';
 import { validateIndianContact } from './phoneValidation';
 
-const PUBLIC_REGISTER_ROLES = new Set<Role>([Role.LISTENER, Role.AUTHOR]);
+const PUBLIC_REGISTER_ROLES = new Set<Role>([
+   Role.LISTENER,
+   Role.AUTHOR,
+   Role.ORG_ADMIN,
+   Role.ORG_COORDINATOR,
+]);
+
+function isOrgStaffRegisterRole(role: Role): boolean {
+   return role === Role.ORG_ADMIN || role === Role.ORG_COORDINATOR;
+}
 
 function resolveContactField(
    contact: unknown,
@@ -65,15 +73,15 @@ export function validateRegisterRequest(
       throw new ValidationError('Invalid password', passwordValidationErrors);
    }
 
-   if (!PUBLIC_REGISTER_ROLES.has(role)) {
+   if (role === Role.GLOBAL_ADMIN) {
       throw new ValidationError('Invalid role', {
-         role: ['Role must be LISTENER or AUTHOR for registration'],
+         role: ['GLOBAL_ADMIN cannot be assigned during registration'],
       });
    }
 
-   if (isStaffRole(role)) {
+   if (!PUBLIC_REGISTER_ROLES.has(role)) {
       throw new ValidationError('Invalid role', {
-         role: ['Staff roles cannot be assigned during registration'],
+         role: ['Role must be LISTENER, AUTHOR, ORG_ADMIN, or ORG_COORDINATOR for registration'],
       });
    }
 
@@ -148,7 +156,7 @@ export function validateRegisterRequest(
    const normalizedUser: RegisterRequest = {
       email,
       password,
-      role: Role.LISTENER,
+      role: isOrgStaffRegisterRole(role) ? role : Role.LISTENER,
       address: address!.trim(),
       contact: normalizedContact!,
    };

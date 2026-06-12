@@ -265,7 +265,6 @@ describe('AuthService register/verify author flow', () => {
       );
       expect(rabbitmqService.publishUserCreated).toHaveBeenCalledWith({
          userId: 'user-1',
-         avatar: 'uploads/images/users/avatar-1.jpg',
       });
       expect(rabbitmqService.publishAuthorCreated).not.toHaveBeenCalled();
       expect(redisService.deletePendingUserRegistration).toHaveBeenCalledWith('user-1');

@@ -28,6 +28,7 @@ import {
 import {
    resolveDeviceContextForRegistrationVerify,
    validateDeviceContext,
+   validateLegacyRegistrationVerifyType,
 } from '../utils/deviceValidation';
 import { validateRegisterRequest } from '../utils/registerValidation';
 import { fileUrlService } from '../services/FileUrlService';
@@ -135,7 +136,26 @@ export class AuthController {
     */
    async verifyRegistrationOTP(req: Request, res: Response): Promise<void> {
       try {
-         const device = resolveDeviceContextForRegistrationVerify(req.body.device, req.body.type);
+         const { email, type } = req.body as { email?: string; type?: string };
+
+         if (!email || typeof email !== 'string') {
+            res.status(400).json({ error: 'Email is required' });
+            return;
+         }
+
+         const { PrismaClient } = await import('@prisma/client');
+         const prisma = new PrismaClient();
+         const user = await prisma.user.findUnique({
+            where: { email: email.toLowerCase() },
+         });
+
+         if (!user) {
+            res.status(404).json({ error: 'User not found' });
+            return;
+         }
+
+         validateLegacyRegistrationVerifyType(type, user.role);
+         const device = resolveDeviceContextForRegistrationVerify(req.body.device, user.role);
          const data: VerifyOTPRequest = { ...req.body, device };
          const result = await authService.verifyRegistrationOTP({
             ...data,
@@ -537,7 +557,7 @@ export class AuthController {
             return;
          }
 
-         res.json({ role: user.role });
+         res.json({ role: user.role, email: user.email });
       } catch (error) {
          res.status(500).json({
             error: error instanceof Error ? error.message : 'Failed to get user role',

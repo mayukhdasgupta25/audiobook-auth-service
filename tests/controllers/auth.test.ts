@@ -37,6 +37,7 @@ jest.mock('../../src/utils/crypto', () => ({
 }));
 
 // Import after mocks
+import { PrismaClient, Role } from '@prisma/client';
 import { authController } from '../../src/controllers/auth';
 import { authService } from '../../src/services/auth';
 import { fileUrlService } from '../../src/services/FileUrlService';
@@ -336,6 +337,26 @@ describe('AuthController', () => {
    });
 
    describe('verifyRegistrationOTP', () => {
+      beforeEach(() => {
+         (PrismaClient as jest.Mock).mockImplementation(() => ({
+            user: {
+               findUnique: jest.fn().mockImplementation(({ where }: { where: { email: string } }) => {
+                  const email = where.email;
+                  if (email === 'author@example.com') {
+                     return Promise.resolve({ id: 'author-1', email, role: Role.AUTHOR });
+                  }
+                  if (email === 'org@example.com') {
+                     return Promise.resolve({ id: 'org-1', email, role: Role.ORG_ADMIN });
+                  }
+                  if (email === 'user@example.com') {
+                     return Promise.resolve({ id: 'user-1', email, role: Role.LISTENER });
+                  }
+                  return Promise.resolve(null);
+               }),
+            },
+         }));
+      });
+
       test('should allow author verification without device', async () => {
          const mockAuthResponse = {
             accessToken: 'access-token',

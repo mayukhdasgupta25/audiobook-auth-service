@@ -60,7 +60,7 @@ describe('validateRegisterRequest', () => {
       });
    });
 
-   test('should reject staff roles on public registration', () => {
+   test('should reject GLOBAL_ADMIN on public registration', () => {
       expect(() =>
          validateRegisterRequest({
             role: Role.GLOBAL_ADMIN,
@@ -71,6 +71,33 @@ describe('validateRegisterRequest', () => {
             contact: '9876543210',
          }),
       ).toThrow(ValidationError);
+   });
+
+   test('should normalize ORG_ADMIN registration', () => {
+      const result = validateRegisterRequest({
+         role: Role.ORG_ADMIN,
+         email: 'org-admin@example.com',
+         password: VALID_PASSWORD,
+         confirmPassword: VALID_PASSWORD,
+         address: '456 Oak Ave',
+         contact: '9876543210',
+      });
+
+      expect(result.role).toBe(Role.ORG_ADMIN);
+      expect(result.email).toBe('org-admin@example.com');
+   });
+
+   test('should normalize ORG_COORDINATOR registration', () => {
+      const result = validateRegisterRequest({
+         role: Role.ORG_COORDINATOR,
+         email: 'coordinator@example.com',
+         password: VALID_PASSWORD,
+         confirmPassword: VALID_PASSWORD,
+         address: '456 Oak Ave',
+         contact: '9876543210',
+      });
+
+      expect(result.role).toBe(Role.ORG_COORDINATOR);
    });
 
    test('should reject author registration without required fields', () => {

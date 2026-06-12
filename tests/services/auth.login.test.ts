@@ -118,7 +118,27 @@ describe('AuthService login app access', () => {
             app: 'partner',
             device: { deviceId: 'device-1' },
          }),
-      ).rejects.toThrow('Access denied. Global admin or author role required.');
+      ).rejects.toThrow('Access denied. Global admin, author, or organization staff role required.');
+   });
+
+   test('should allow ORG_ADMIN users for partner app', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({
+         ...verifiedUser,
+         role: Role.ORG_ADMIN,
+      });
+
+      await expect(
+         authService.login({
+            email: 'org@example.com',
+            password: 'password123',
+            app: 'partner',
+            device: { deviceId: 'device-1' },
+         }),
+      ).resolves.toEqual(
+         expect.objectContaining({
+            accessToken: 'access-token',
+         }),
+      );
    });
 
 });

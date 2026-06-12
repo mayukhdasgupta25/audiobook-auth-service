@@ -1,7 +1,9 @@
+import { Role } from '@prisma/client';
 import {
    isDeviceOptionalForRegistrationVerifyType,
    resolveDeviceContextForRegistrationVerify,
    validateDeviceContext,
+   validateLegacyRegistrationVerifyType,
 } from '../../src/utils/deviceValidation';
 import { ValidationError } from '../../src/types';
 
@@ -30,7 +32,7 @@ describe('validateDeviceContext', () => {
    });
 });
 
-describe('isDeviceOptionalForRegistrationVerifyType', () => {
+describe('isDeviceOptionalForRegistrationVerifyType (legacy)', () => {
    it('returns true for author and organization', () => {
       expect(isDeviceOptionalForRegistrationVerifyType('author')).toBe(true);
       expect(isDeviceOptionalForRegistrationVerifyType('AUTHOR')).toBe(true);
@@ -45,20 +47,40 @@ describe('isDeviceOptionalForRegistrationVerifyType', () => {
    });
 });
 
-describe('resolveDeviceContextForRegistrationVerify', () => {
-   it('allows missing device for author and organization', () => {
-      expect(resolveDeviceContextForRegistrationVerify(undefined, 'author')).toBeUndefined();
-      expect(resolveDeviceContextForRegistrationVerify(null, 'organization')).toBeUndefined();
+describe('validateLegacyRegistrationVerifyType', () => {
+   it('allows matching author type for AUTHOR role', () => {
+      expect(() =>
+         validateLegacyRegistrationVerifyType('author', Role.AUTHOR),
+      ).not.toThrow();
    });
 
-   it('validates device when provided for author and organization', () => {
+   it('rejects author type for LISTENER role', () => {
+      expect(() =>
+         validateLegacyRegistrationVerifyType('author', Role.LISTENER),
+      ).toThrow(ValidationError);
+   });
+
+   it('allows organization type for ORG_ADMIN role', () => {
+      expect(() =>
+         validateLegacyRegistrationVerifyType('organization', Role.ORG_ADMIN),
+      ).not.toThrow();
+   });
+});
+
+describe('resolveDeviceContextForRegistrationVerify', () => {
+   it('allows missing device for non-LISTENER roles', () => {
+      expect(resolveDeviceContextForRegistrationVerify(undefined, Role.AUTHOR)).toBeUndefined();
+      expect(resolveDeviceContextForRegistrationVerify(null, Role.ORG_ADMIN)).toBeUndefined();
+      expect(resolveDeviceContextForRegistrationVerify(undefined, Role.ORG_COORDINATOR)).toBeUndefined();
+   });
+
+   it('validates device when provided for non-LISTENER roles', () => {
       expect(
-         resolveDeviceContextForRegistrationVerify({ deviceId: 'device-1' }, 'author'),
+         resolveDeviceContextForRegistrationVerify({ deviceId: 'device-1' }, Role.AUTHOR),
       ).toEqual({ deviceId: 'device-1' });
    });
 
-   it('requires device for other types', () => {
-      expect(() => resolveDeviceContextForRegistrationVerify(undefined, 'user')).toThrow(ValidationError);
-      expect(() => resolveDeviceContextForRegistrationVerify(undefined, undefined)).toThrow(ValidationError);
+   it('requires device for LISTENER role', () => {
+      expect(() => resolveDeviceContextForRegistrationVerify(undefined, Role.LISTENER)).toThrow(ValidationError);
    });
 });

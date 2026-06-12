@@ -1,8 +1,11 @@
 import {
    AuthRole,
+   isDeviceOptionalForRole,
    isGlobalAdminRole,
    isOrgAdminRole,
    isOrgCoordinatorRole,
+   isPartnerAppRole,
+   isStaffRole,
    normalizeAuthRole,
 } from '../../src/constants/authRoles';
 import { ClientType } from '../../src/constants/clientType';
@@ -39,6 +42,27 @@ describe('authRoles', () => {
       test('isOrgCoordinatorRole matches ORG_COORDINATOR only', () => {
          expect(isOrgCoordinatorRole(AuthRole.ORG_COORDINATOR)).toBe(true);
          expect(isOrgCoordinatorRole(AuthRole.ORG_ADMIN)).toBe(false);
+      });
+
+      test('isStaffRole matches GLOBAL_ADMIN, ORG_ADMIN, and ORG_COORDINATOR', () => {
+         expect(isStaffRole(AuthRole.GLOBAL_ADMIN)).toBe(true);
+         expect(isStaffRole(AuthRole.ORG_ADMIN)).toBe(true);
+         expect(isStaffRole(AuthRole.ORG_COORDINATOR)).toBe(true);
+         expect(isStaffRole(AuthRole.LISTENER)).toBe(false);
+      });
+
+      test('isPartnerAppRole allows org staff and authors', () => {
+         expect(isPartnerAppRole(AuthRole.GLOBAL_ADMIN)).toBe(true);
+         expect(isPartnerAppRole(AuthRole.AUTHOR)).toBe(true);
+         expect(isPartnerAppRole(AuthRole.ORG_ADMIN)).toBe(true);
+         expect(isPartnerAppRole(AuthRole.ORG_COORDINATOR)).toBe(true);
+         expect(isPartnerAppRole(AuthRole.LISTENER)).toBe(false);
+      });
+
+      test('isDeviceOptionalForRole requires device only for LISTENER', () => {
+         expect(isDeviceOptionalForRole(AuthRole.LISTENER)).toBe(false);
+         expect(isDeviceOptionalForRole(AuthRole.AUTHOR)).toBe(true);
+         expect(isDeviceOptionalForRole(AuthRole.ORG_ADMIN)).toBe(true);
       });
    });
 });
