@@ -69,6 +69,16 @@ jest.mock('../../src/services/userDevice', () => ({
    },
 }));
 
+jest.mock('../../src/services/AuthorService', () => ({
+   AuthorService: jest.fn().mockImplementation(() => ({
+      createAuthorForUser: jest.fn().mockResolvedValue({
+         id: 'author-1',
+         userId: 'author-user-1',
+         slug: 'jane-doe-abc12345',
+      }),
+   })),
+}));
+
 jest.mock('../../src/services/google-oauth', () => ({
    googleOAuthService: {
       verifyIdToken: jest.fn(),
@@ -176,12 +186,8 @@ describe('AuthService register/verify author flow', () => {
       });
 
       expect(rabbitmqService.publishAuthorCreated).toHaveBeenCalledWith({
-         userId: 'author-user-1',
-         firstName: 'Jane',
-         lastName: 'Doe',
-         address: '123 Main St',
-         contact: '+919876543210',
-         profileImage: '/uploads/images/authors/image-1.jpg',
+         authorId: 'author-1',
+         avatar: '/uploads/images/authors/image-1.jpg',
       });
       expect(rabbitmqService.publishUserCreated).not.toHaveBeenCalled();
       expect(redisService.deletePendingAuthorRegistration).toHaveBeenCalledWith('author-user-1');

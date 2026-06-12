@@ -166,38 +166,18 @@ export class RabbitMQService {
    /**
     * Publish author created event
     */
-   async publishAuthorCreated(data: {
-      userId: string;
-      firstName: string;
-      lastName: string;
-      address: string;
-      contact?: string;
-      profileImage?: string;
-   }): Promise<void> {
+   async publishAuthorCreated(data: { authorId: string; avatar?: string }): Promise<void> {
       if (!this.isServiceConnected()) {
          throw new Error('RabbitMQ service is not connected');
       }
 
       try {
-         const messageData: {
-            userId: string;
-            firstName: string;
-            lastName: string;
-            address: string;
-            contact?: string;
-            profileImage?: string;
-         } = {
-            userId: data.userId,
-            firstName: data.firstName,
-            lastName: data.lastName,
-            address: data.address,
+         const messageData: { authorId: string; avatar?: string } = {
+            authorId: data.authorId,
          };
 
-         if (data.contact !== undefined) {
-            messageData.contact = data.contact;
-         }
-         if (data.profileImage !== undefined) {
-            messageData.profileImage = data.profileImage;
+         if (data.avatar !== undefined) {
+            messageData.avatar = data.avatar;
          }
 
          const message = JSON.stringify(messageData);
@@ -218,11 +198,11 @@ export class RabbitMQService {
          }
 
          if (config.NODE_ENV !== 'test') {
-            rabbitmqLogger.info({ userId: data.userId, routingKey }, 'Published author.created event');
+            rabbitmqLogger.info({ authorId: data.authorId, routingKey }, 'Published author.created event');
          }
       } catch (error) {
          if (config.NODE_ENV !== 'test') {
-            rabbitmqLogger.error({ err: error, userId: data.userId }, 'Error publishing author created event');
+            rabbitmqLogger.error({ err: error, authorId: data.authorId }, 'Error publishing author created event');
          }
          throw error;
       }

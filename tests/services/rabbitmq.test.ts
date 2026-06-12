@@ -170,11 +170,7 @@ describe('RabbitMQService', () => {
 
       test('should publish author created event', async () => {
          const data = {
-            userId: 'author-user-123',
-            firstName: 'Jane',
-            lastName: 'Doe',
-            address: '123 Main St',
-            contact: '+919876543210',
+            authorId: 'author-123',
          };
          mockChannel.publish.mockReturnValueOnce(true);
 
@@ -191,13 +187,10 @@ describe('RabbitMQService', () => {
          );
       });
 
-      test('should publish author created event with profileImage filepath', async () => {
+      test('should publish author created event with avatar', async () => {
          const data = {
-            userId: 'author-user-123',
-            firstName: 'Jane',
-            lastName: 'Doe',
-            address: '123 Main St',
-            profileImage: '/uploads/images/authors/image-1.jpg',
+            authorId: 'author-123',
+            avatar: '/uploads/images/authors/image-1.jpg',
          };
          mockChannel.publish.mockReturnValueOnce(true);
 

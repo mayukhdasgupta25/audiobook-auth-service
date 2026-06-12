@@ -6,6 +6,7 @@ import { redisService } from '../services/redis';
 import { config } from '../config/env';
 import { AuthError, ValidationError } from '../types';
 import { SubscriptionError } from '../types/subscription';
+import { DomainError } from '../types/domain';
 import { AuthRoleGroups } from '../constants/authRoles';
 
 export { validateCsrf, requiresCsrfProtection } from './csrf';
@@ -169,6 +170,14 @@ export const errorHandler = (
    }
 
    if (error instanceof SubscriptionError) {
+      res.status(error.statusCode).json({
+         error: error.message,
+         code: error.code,
+      });
+      return;
+   }
+
+   if (error instanceof DomainError) {
       res.status(error.statusCode).json({
          error: error.message,
          code: error.code,
