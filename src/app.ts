@@ -10,6 +10,7 @@ import subscriptionPlanRoutes from './routes/subscriptionPlan';
 import userSubscriptionRoutes from './routes/userSubscription';
 import { createOrganizationRoutes } from './routes/organizationRoutes';
 import { createAuthorRoutes } from './routes/authorRoutes';
+import { createCatalogRoutes } from './routes/catalogRoutes';
 import {
    errorHandler,
    notFound,
@@ -76,6 +77,7 @@ export const createApp = (): express.Application => {
    app.use('/auth/subscriptions', userSubscriptionRoutes);
    app.use('/auth/organizations', authenticateToken, createOrganizationRoutes(prisma));
    app.use('/auth/authors', authenticateToken, createAuthorRoutes(prisma));
+   app.use('/auth/catalog', authenticateToken, createCatalogRoutes(prisma));
 
    // Root endpoint
    app.get('/', (_req, res) => {
