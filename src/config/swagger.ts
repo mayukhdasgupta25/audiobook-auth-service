@@ -41,6 +41,12 @@ const options: swaggerJsdoc.Options = {
             },
          },
          schemas: {
+            ImageAssetsMap: {
+               type: 'object',
+               additionalProperties: { type: 'string' },
+               description: 'Map of image variantKey to resolved URL',
+               example: { square_512: 'https://cdn.example.com/uploads/images/organization/org1/square_512.jpg' },
+            },
             ApiResponse: {
                type: 'object',
                properties: {
@@ -66,7 +72,8 @@ const options: swaggerJsdoc.Options = {
                   name: { type: 'string', example: 'Acme Publishing' },
                   slug: { type: 'string', example: 'acme-publishing' },
                   description: { type: 'string', nullable: true, example: 'Independent audiobook publisher' },
-                  image: { type: 'string', nullable: true, example: '/uploads/orgs/logo.jpg' },
+                  image: { type: 'string', nullable: true, example: '/uploads/orgs/logo.jpg', description: 'Primary organization image (square_512 variant)' },
+                  imageAssets: { $ref: '#/components/schemas/ImageAssetsMap' },
                   preferredGenre: { type: 'string', nullable: true, example: 'Fiction' },
                   websiteUrl: { type: 'string', nullable: true, example: 'https://acme.example.com' },
                   teamSize: { type: 'string', nullable: true, enum: ['1-10', '11-50', '51-200', '200+'] },

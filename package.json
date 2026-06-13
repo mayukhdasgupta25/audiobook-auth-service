@@ -76,6 +76,7 @@
     "express-rate-limit": "^7.1.5",
     "google-auth-library": "^10.5.0",
     "helmet": "^7.1.0",
+    "image-size": "^2.0.2",
     "js-yaml": "^4.1.0",
     "jsonwebtoken": "^9.0.2",
     "libphonenumber-js": "^1.13.6",

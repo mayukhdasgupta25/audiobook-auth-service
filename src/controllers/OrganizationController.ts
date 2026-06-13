@@ -13,7 +13,6 @@ import {
    OrganizationTeamSizeType,
    UpdateOrganizationDto,
 } from '../models/OrganizationDto';
-import { fileUrlService } from '../services/FileUrlService';
 
 function parseOptionalString(value: unknown): string | undefined {
    if (value === undefined || value === null || typeof value !== 'string') {
@@ -111,21 +110,18 @@ export class OrganizationController {
          const uploadedImage = (req as Request & { organizationImageFile?: Express.Multer.File })
             .organizationImageFile;
 
-         const image = uploadedImage
-            ? await fileUrlService.processUploadedImageFile(
-               uploadedImage.path,
-               'uploads/images/organizations',
-               uploadedImage.mimetype || 'image/jpeg',
-            )
-            : undefined;
+         const imageSourcePath = uploadedImage?.path;
 
          const createData: CreateOrganizationDto = {
             ...req.body,
-            image,
             ...parseProfileFieldsFromBody(req.body, false),
          };
 
-         const created = await this.organizationService.createOrganization(createData, userId);
+         const created = await this.organizationService.createOrganization(
+            createData,
+            userId,
+            imageSourcePath,
+         );
          res.status(201).json({
             message: domainMessages.success.organizations.created,
             organization: created,
@@ -190,11 +186,16 @@ export class OrganizationController {
          };
 
          if (uploadedImage) {
-            updateData.image = await fileUrlService.processUploadedImageFile(
+            const updated = await this.organizationService.updateOrganization(
+               id,
+               updateData,
                uploadedImage.path,
-               'uploads/images/organizations',
-               uploadedImage.mimetype || 'image/jpeg',
             );
+            res.status(200).json({
+               message: domainMessages.success.organizations.updated,
+               organization: updated,
+            });
+            return;
          }
 
          const updated = await this.organizationService.updateOrganization(id, updateData);

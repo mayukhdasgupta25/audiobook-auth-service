@@ -15,6 +15,7 @@ import { fileUrlService } from './FileUrlService';
 import { generateOrganizationSlug } from '../utils/slug';
 import { rabbitmqService } from './rabbitmq';
 import { mediaCleanupService } from './MediaCleanupService';
+import { ImageAssetService } from './ImageAssetService';
 import {
    AuthRole,
    isOrgAdminRole,
@@ -56,11 +57,16 @@ export function hasOrgStaffAccess(
 }
 
 export class OrganizationService {
-   constructor(private prisma: PrismaClient) {}
+   private imageAssetService: ImageAssetService;
+
+   constructor(private prisma: PrismaClient) {
+      this.imageAssetService = new ImageAssetService(prisma);
+   }
 
    async createOrganization(
       data: CreateOrganizationDto,
       creatorUserId?: string,
+      imageSourcePath?: string,
    ): Promise<OrganizationDto> {
       const name = data.name?.trim();
       if (!name) {
@@ -102,6 +108,19 @@ export class OrganizationService {
 
             return created;
          });
+
+         if (imageSourcePath) {
+            const { primaryStorageKey } = await this.imageAssetService.generateAndStoreVariants(
+               'organization',
+               organization.id,
+               imageSourcePath,
+            );
+            const updated = await this.prisma.organization.update({
+               where: { id: organization.id },
+               data: { image: primaryStorageKey },
+            });
+            return fileUrlService.resolveOrganizationMedia(toOrganizationDto(updated));
+         }
 
          return fileUrlService.resolveOrganizationMedia(toOrganizationDto(organization));
       } catch (error) {
@@ -195,7 +214,11 @@ export class OrganizationService {
       return fileUrlService.resolveOrganizationMedia(toOrganizationDto(organization));
    }
 
-   async updateOrganization(id: string, data: UpdateOrganizationDto): Promise<OrganizationDto> {
+   async updateOrganization(
+      id: string,
+      data: UpdateOrganizationDto,
+      imageSourcePath?: string,
+   ): Promise<OrganizationDto> {
       const updates: Prisma.OrganizationUpdateInput = {};
 
       if (data.name !== undefined) {
@@ -213,7 +236,7 @@ export class OrganizationService {
          updates.description = data.description.trim() || null;
       }
 
-      if (data.image !== undefined) {
+      if (data.image !== undefined && !imageSourcePath) {
          updates.image = data.image;
       }
 
@@ -229,7 +252,7 @@ export class OrganizationService {
          updates.teamSize = this.normalizeTeamSize(data.teamSize);
       }
 
-      if (Object.keys(updates).length === 0) {
+      if (Object.keys(updates).length === 0 && !imageSourcePath) {
          throw DomainError.validation(domainMessages.error.validation.no_update_fields);
       }
 
@@ -239,10 +262,28 @@ export class OrganizationService {
             throw DomainError.notFound(msg.not_found);
          }
 
-         const updated = await this.prisma.organization.update({
-            where: { id },
-            data: updates,
-         });
+         let updated = existing;
+         if (Object.keys(updates).length > 0) {
+            updated = await this.prisma.organization.update({
+               where: { id },
+               data: updates,
+            });
+         }
+
+         if (imageSourcePath) {
+            const { primaryStorageKey } = await this.imageAssetService.generateAndStoreVariants(
+               'organization',
+               id,
+               imageSourcePath,
+            );
+            updated = await this.prisma.organization.update({
+               where: { id },
+               data: { image: primaryStorageKey },
+            });
+         } else if (data.image !== undefined && data.image !== existing.image) {
+            await this.imageAssetService.deleteAssetsForEntity('organization', id);
+            await mediaCleanupService.deleteStoredFile(existing.image);
+         }
 
          return fileUrlService.resolveOrganizationMedia(toOrganizationDto(updated));
       } catch (error) {
@@ -261,6 +302,7 @@ export class OrganizationService {
          }
 
          const orgImage = existing.image;
+         await this.imageAssetService.deleteAssetsForEntity('organization', id);
          await this.prisma.organization.delete({ where: { id } });
 
          try {

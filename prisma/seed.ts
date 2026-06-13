@@ -1,6 +1,7 @@
 import { BillingInterval, Prisma, PrismaClient } from '@prisma/client';
 import { config } from '../src/config/env';
 import { SubscriptionPlanFeatures } from '../src/types/subscriptionPlanFeatures';
+import { seedImagePlaceholderSpecs } from './imagePlaceholderSpecs.seed';
 
 const prisma = new PrismaClient();
 
@@ -50,32 +51,33 @@ const PLANS: Array<{
 ];
 
 async function main(): Promise<void> {
-   console.log('Starting subscription plan seed...');
+   console.log('Starting auth-service seed...');
 
    const existingCount = await prisma.subscriptionPlan.count();
    if (existingCount > 0) {
-      console.log('Subscription plans already exist. Skipping seed.');
-      return;
+      console.log('Subscription plans already exist. Skipping plan seed.');
+   } else {
+      for (const plan of PLANS) {
+         const record = await prisma.subscriptionPlan.create({
+            data: {
+               name: plan.name,
+               description: plan.description,
+               price: new Prisma.Decimal(plan.price),
+               currency: config.SUBSCRIPTION_CURRENCY,
+               tierLevel: plan.tierLevel,
+               billingInterval: BillingInterval.MONTHLY,
+               trialDays: 0,
+               features: plan.features as unknown as Prisma.InputJsonValue,
+               isActive: true,
+            },
+         });
+         console.log(`Created plan: ${record.name} (tier ${record.tierLevel})`);
+      }
+      console.log('Subscription plan seed completed.');
    }
 
-   for (const plan of PLANS) {
-      const record = await prisma.subscriptionPlan.create({
-         data: {
-            name: plan.name,
-            description: plan.description,
-            price: new Prisma.Decimal(plan.price),
-            currency: config.SUBSCRIPTION_CURRENCY,
-            tierLevel: plan.tierLevel,
-            billingInterval: BillingInterval.MONTHLY,
-            trialDays: 0,
-            features: plan.features as unknown as Prisma.InputJsonValue,
-            isActive: true,
-         },
-      });
-      console.log(`Created plan: ${record.name} (tier ${record.tierLevel})`);
-   }
-
-   console.log('Subscription plan seed completed.');
+   await seedImagePlaceholderSpecs(prisma);
+   console.log('Image placeholder specs seed completed.');
 }
 
 main()
