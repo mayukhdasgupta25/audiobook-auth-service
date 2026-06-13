@@ -15,6 +15,12 @@ jest.mock('../../src/middleware/RegisterUploadMiddleware', () => ({
    getFileUrl: (filePath: string) => `/uploads${filePath.replace('./src/uploads', '')}`,
 }));
 
+jest.mock('../../src/services/ImageAssetService', () => ({
+   ImageAssetService: jest.fn().mockImplementation(() => ({
+      resolveAssetsForClient: jest.fn().mockResolvedValue({}),
+   })),
+}));
+
 describe('FileUrlService', () => {
    let service: FileUrlService;
    const mockGetFileUrl = jest.fn();

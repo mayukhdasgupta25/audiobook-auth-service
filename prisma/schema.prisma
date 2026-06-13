@@ -383,3 +383,38 @@ model OrganizationMember {
    @@index([organizationId])
    @@map("organization_members")
 }
+
+enum ImageCategory {
+   organization
+}
+
+model ImagePlaceholderSpec {
+   id                   String        @id @default(cuid())
+   category             ImageCategory
+   variantKey           String
+   actualWidth          Int
+   actualHeight         Int
+   aspectRatioWidth     Int
+   aspectRatioHeight    Int
+   recommendedMaxWidth  Int
+   recommendedMaxHeight Int
+
+   @@unique([category, variantKey])
+   @@map("image_placeholder_specs")
+}
+
+model ImageAsset {
+   id          String        @id @default(cuid())
+   category    ImageCategory
+   entityId    String
+   variantKey  String
+   storageKey  String
+   width       Int
+   height      Int
+   createdAt   DateTime      @default(now())
+   updatedAt   DateTime      @updatedAt
+
+   @@unique([category, entityId, variantKey])
+   @@index([category, entityId])
+   @@map("image_assets")
+}

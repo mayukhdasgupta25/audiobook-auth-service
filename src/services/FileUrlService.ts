@@ -3,6 +3,8 @@ import path from 'path';
 import { config } from '../config/env';
 import { getFileUrl } from '../middleware/RegisterUploadMiddleware';
 import { StorageFactory } from './storage/StorageFactory';
+import { prisma } from '../lib/prisma';
+import { ImageAssetService } from './ImageAssetService';
 
 export type ImageKeyDirectory =
    | 'uploads/images/users'
@@ -10,6 +12,8 @@ export type ImageKeyDirectory =
    | 'uploads/images/organizations';
 
 export class FileUrlService {
+   private imageAssetService = new ImageAssetService(prisma);
+
    shouldSignUrls(): boolean {
       return config.NODE_ENV !== 'development';
    }
@@ -129,15 +133,21 @@ export class FileUrlService {
       return storedKey;
    }
 
-   async resolveOrganizationMedia<T extends { image?: string | null }>(dto: T): Promise<T> {
+   async resolveOrganizationMedia<T extends { id: string; image?: string | null }>(
+      dto: T,
+   ): Promise<T & { imageAssets: Record<string, string> }> {
       const image = await this.resolveForClient(dto.image);
+      const imageAssets = await this.imageAssetService.resolveAssetsForClient('organization', dto.id);
       return {
          ...dto,
          image: image ?? dto.image ?? null,
+         imageAssets,
       };
    }
 
-   async resolveOrganizationMediaList<T extends { image?: string | null }>(dtos: T[]): Promise<T[]> {
+   async resolveOrganizationMediaList<T extends { id: string; image?: string | null }>(
+      dtos: T[],
+   ): Promise<(T & { imageAssets: Record<string, string> })[]> {
       return Promise.all(dtos.map((dto) => this.resolveOrganizationMedia(dto)));
    }
 }

@@ -14,6 +14,7 @@ export interface OrganizationDto {
    slug: string;
    description?: string | undefined;
    image?: string | null;
+   imageAssets?: Record<string, string>;
    preferredGenre?: string | null;
    websiteUrl?: string | null;
    teamSize?: OrganizationTeamSizeType | null;
