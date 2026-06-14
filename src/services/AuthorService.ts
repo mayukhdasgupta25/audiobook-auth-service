@@ -10,6 +10,7 @@ import { DomainError } from '../types/domain';
 import { domainMessages } from '../utils/domainMessages';
 import { generateAuthorSlug } from '../utils/slug';
 import { rabbitmqService } from './rabbitmq';
+import { emitCacheInvalidation } from './DomainEventPublisher';
 
 const msg = domainMessages.error.authors;
 const validationMsg = domainMessages.error.validation;
@@ -116,6 +117,7 @@ export class AuthorService {
          data: { userId, slug },
          include: authorInclude,
       });
+      emitCacheInvalidation('author', 'created', author.id);
       return toAuthorDto(author);
    }
 
@@ -173,6 +175,7 @@ export class AuthorService {
          await this.syncAuthorOrganizations(author.id, createAuthorDto.organizationIds);
 
          const created = await this.getAuthorRecord(author.id);
+         emitCacheInvalidation('author', 'created', author.id);
          return toAuthorDto(created);
       } catch (error) {
          if (error instanceof DomainError) {
@@ -241,6 +244,7 @@ export class AuthorService {
          await this.syncAuthorOrganizations(id, updateAuthorDto.organizationIds);
 
          const updated = await this.getAuthorRecord(id);
+         emitCacheInvalidation('author', 'updated', id);
          return toAuthorDto(updated);
       } catch (error) {
          if (error instanceof DomainError) {
@@ -265,6 +269,7 @@ export class AuthorService {
          } catch (error) {
             console.error(`Failed to publish author.deleted for author ${id}:`, error);
          }
+         emitCacheInvalidation('author', 'deleted', id, { userId });
       } catch (error) {
          if (error instanceof DomainError) {
             throw error;

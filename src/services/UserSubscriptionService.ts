@@ -23,6 +23,7 @@ import {
 import { SubscriptionError } from '../types/subscription';
 import { subscriptionMessages } from '../utils/subscriptionMessages';
 import { computeProration } from '../utils/subscriptionProration';
+import { emitCacheInvalidation } from './DomainEventPublisher';
 
 const planMsg = subscriptionMessages.error.subscription_plans;
 const subMsg = subscriptionMessages.error.user_subscriptions;
@@ -125,6 +126,7 @@ export class UserSubscriptionService {
             },
             include: subscriptionInclude,
          });
+         emitCacheInvalidation('user-subscription', 'created', created.id, { userId: data.userId });
          return toUserSubscriptionWithPlan(created);
       } catch (error) {
          if (error instanceof SubscriptionError) throw error;
@@ -206,6 +208,7 @@ export class UserSubscriptionService {
             throw SubscriptionError.validation(subscriptionMessages.error.validation.no_update_fields);
          }
          const updated = await this.prisma.userSubscription.update({ where: { id }, data: updateData });
+         emitCacheInvalidation('user-subscription', 'updated', id, { userId: existing.userId });
          return toUserSubscriptionDto(updated);
       } catch (error) {
          if (error instanceof SubscriptionError) throw error;
@@ -232,6 +235,7 @@ export class UserSubscriptionService {
             updateData.endDate = now;
          }
          const updated = await this.prisma.userSubscription.update({ where: { id }, data: updateData });
+         emitCacheInvalidation('user-subscription', 'updated', id, { userId: existing.userId });
          return toUserSubscriptionDto(updated);
       } catch (error) {
          if (error instanceof SubscriptionError) throw error;
@@ -329,6 +333,9 @@ export class UserSubscriptionService {
                return sub;
             });
 
+            emitCacheInvalidation('user-subscription', 'updated', subscriptionId, {
+               userId: existing.userId,
+            });
             return {
                changeType: PlanChangeType.UPGRADE,
                effectiveAt: now,
@@ -367,6 +374,9 @@ export class UserSubscriptionService {
             return sub;
          });
 
+         emitCacheInvalidation('user-subscription', 'updated', subscriptionId, {
+            userId: existing.userId,
+         });
          return {
             changeType: PlanChangeType.DOWNGRADE,
             effectiveAt,
@@ -398,6 +408,9 @@ export class UserSubscriptionService {
                pendingPlanChangeType: null,
             },
             include: subscriptionInclude,
+         });
+         emitCacheInvalidation('user-subscription', 'updated', subscriptionId, {
+            userId: existing.userId,
          });
          return toUserSubscriptionWithPlan(updated);
       } catch (error) {
@@ -476,6 +489,7 @@ export class UserSubscriptionService {
             return sub;
          });
 
+         emitCacheInvalidation('user-subscription', 'updated', id, { userId: existing.userId });
          return toUserSubscriptionDto(updated);
       } catch (error) {
          if (error instanceof SubscriptionError) throw error;
@@ -488,6 +502,7 @@ export class UserSubscriptionService {
          const existing = await this.prisma.userSubscription.findUnique({ where: { id } });
          if (!existing) throw SubscriptionError.notFound(subMsg.not_found);
          await this.prisma.userSubscription.delete({ where: { id } });
+         emitCacheInvalidation('user-subscription', 'deleted', id, { userId: existing.userId });
          return true;
       } catch (error) {
          if (error instanceof SubscriptionError) throw error;

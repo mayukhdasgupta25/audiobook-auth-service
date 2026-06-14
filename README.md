@@ -200,6 +200,7 @@ Logs are written under `logs/` (created at startup, gitignored). Each file only 
 | `rabbitmq.log` | RabbitMQ connection and publish events                                 |
 | `redis.log`    | Redis client, token revocation, PKCE, JWKS cache in Redis              |
 | `email.log`    | OTP/email send and email logging                                       |
+| `sse.log`      | SSE cache-invalidation events (published and forwarded to clients)     |
 
 Logging uses [Pino](https://getpino.io/) ([`src/utils/logger.ts`](src/utils/logger.ts)). Level is controlled by `LOG_LEVEL` in your env file. In `development` and `testing`, logs also print to the console (pretty-printed). Jest (`NODE_ENV=test`) uses silent loggers so no files are written during `npm test`.
 

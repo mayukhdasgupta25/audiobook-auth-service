@@ -1,6 +1,7 @@
 import { Gender, PrismaClient } from '@prisma/client';
 import { UpdateUserProfileRequest, UserResponse } from '../types';
 import { LocationResolverService } from './LocationResolverService';
+import { emitCacheInvalidation } from './DomainEventPublisher';
 
 const prisma = new PrismaClient();
 
@@ -58,6 +59,8 @@ export class UserProfileService {
          where: { id: userId },
          data: updateData,
       });
+
+      emitCacheInvalidation('user-profile', 'updated', userId, { userId });
 
       return toUserResponse(user);
    }
