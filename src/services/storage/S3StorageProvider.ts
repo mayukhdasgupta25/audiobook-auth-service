@@ -9,8 +9,6 @@ export class S3StorageProvider implements StorageProvider {
    constructor(storageConfig?: Partial<StorageConfig>) {
       const options: AWS.S3.ClientConfiguration = {
          region: config.AWS_S3_REGION,
-         accessKeyId: config.AWS_ACCESS_KEY_ID,
-         secretAccessKey: config.AWS_SECRET_ACCESS_KEY,
       };
 
       if (config.AWS_S3_ENDPOINT) {
