@@ -8,6 +8,7 @@ import {
 } from '@prisma/client';
 import { AuthError } from '../types';
 import type { DeviceContext, DeviceRequestMeta } from '../types';
+import { emitCacheInvalidation } from './DomainEventPublisher';
 import { getCalendarMonthBounds, parsePlanFeatures, resolveDeviceChangesPerMonth, resolveMaxDevices } from '../utils/deviceLimits';
 import { otpService } from './otp';
 import { appLogger } from '../utils/logger';
@@ -172,6 +173,8 @@ export class UserDeviceService {
 
          await tx.userDevice.delete({ where: { id: device.id } });
       });
+
+      emitCacheInvalidation('user-device', 'deleted', device.id, { userId });
    }
 
    /**

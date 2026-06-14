@@ -16,6 +16,7 @@ import { generateOrganizationSlug } from '../utils/slug';
 import { rabbitmqService } from './rabbitmq';
 import { mediaCleanupService } from './MediaCleanupService';
 import { ImageAssetService } from './ImageAssetService';
+import { emitCacheInvalidation } from './DomainEventPublisher';
 import {
    AuthRole,
    isOrgAdminRole,
@@ -119,9 +120,11 @@ export class OrganizationService {
                where: { id: organization.id },
                data: { image: primaryStorageKey },
             });
+            emitCacheInvalidation('organization', 'created', organization.id);
             return fileUrlService.resolveOrganizationMedia(toOrganizationDto(updated));
          }
 
+         emitCacheInvalidation('organization', 'created', organization.id);
          return fileUrlService.resolveOrganizationMedia(toOrganizationDto(organization));
       } catch (error) {
          if (error instanceof DomainError) {
@@ -285,6 +288,7 @@ export class OrganizationService {
             await mediaCleanupService.deleteStoredFile(existing.image);
          }
 
+         emitCacheInvalidation('organization', 'updated', id);
          return fileUrlService.resolveOrganizationMedia(toOrganizationDto(updated));
       } catch (error) {
          if (error instanceof DomainError) {
@@ -312,6 +316,7 @@ export class OrganizationService {
          }
 
          await mediaCleanupService.deleteStoredFile(orgImage);
+         emitCacheInvalidation('organization', 'deleted', id);
       } catch (error) {
          if (error instanceof DomainError) {
             throw error;
@@ -384,6 +389,7 @@ export class OrganizationService {
          if (dto.organization) {
             dto.organization = await fileUrlService.resolveOrganizationMedia(dto.organization);
          }
+         emitCacheInvalidation('organization-member', 'created', member.id, { organizationId });
          return dto;
       } catch (error) {
          if (error instanceof DomainError) {
@@ -452,6 +458,7 @@ export class OrganizationService {
          if (dto.organization) {
             dto.organization = await fileUrlService.resolveOrganizationMedia(dto.organization);
          }
+         emitCacheInvalidation('organization-member', 'updated', updated.id, { organizationId });
          return dto;
       } catch (error) {
          if (error instanceof DomainError) {
@@ -482,6 +489,7 @@ export class OrganizationService {
          await this.prisma.organizationMember.delete({
             where: { userId_organizationId: { userId, organizationId } },
          });
+         emitCacheInvalidation('organization-member', 'deleted', member.id, { organizationId });
       } catch (error) {
          if (error instanceof DomainError) {
             throw error;

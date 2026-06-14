@@ -341,6 +341,34 @@ const options: swaggerJsdoc.Options = {
                   },
                },
             },
+            CacheInvalidateEvent: {
+               type: 'object',
+               required: ['version', 'service', 'resource', 'action', 'id', 'queryKeys', 'timestamp'],
+               description:
+                  'TanStack Query cache-invalidation payload emitted on SSE event `cache-invalidate`. Loop queryKeys and call queryClient.invalidateQueries({ queryKey }) for each.',
+               properties: {
+                  version: { type: 'integer', example: 1 },
+                  service: { type: 'string', enum: ['auth'], example: 'auth' },
+                  resource: {
+                     type: 'string',
+                     example: 'organization',
+                     description: 'Stable entity name (user, organization, subscription-plan, …)',
+                  },
+                  action: { type: 'string', enum: ['created', 'updated', 'deleted'] },
+                  id: { type: 'string', example: 'corg1234567890abcdefghij' },
+                  queryKeys: {
+                     type: 'array',
+                     items: { type: 'array', items: { type: 'string' } },
+                     example: [['organizations'], ['organizations', 'corg1234567890abcdefghij']],
+                  },
+                  relatedIds: {
+                     type: 'object',
+                     additionalProperties: { type: 'string' },
+                     example: { organizationId: 'corg1234567890abcdefghij' },
+                  },
+                  timestamp: { type: 'string', format: 'date-time' },
+               },
+            },
          },
          responses: {
             Unauthorized: {
@@ -386,6 +414,7 @@ const options: swaggerJsdoc.Options = {
          { name: 'SubscriptionPlans', description: 'Subscription plan management' },
          { name: 'Subscriptions', description: 'User subscription lifecycle' },
          { name: 'Devices', description: 'Registered user devices' },
+         { name: 'Events', description: 'SSE cache-invalidation stream for TanStack Query clients' },
          { name: 'Health', description: 'Service health checks' },
       ],
    },

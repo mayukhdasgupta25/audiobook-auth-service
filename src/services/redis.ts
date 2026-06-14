@@ -370,6 +370,20 @@ export class RedisService {
          redisLogger.error({ err: error, userId }, 'Failed to delete pending user registration');
       }
    }
+
+   /**
+    * Publish a message to a Redis pub/sub channel (SSE domain events).
+    */
+   async publish(channel: string, message: string): Promise<void> {
+      await this.client.publish(channel, message);
+   }
+
+   /**
+    * Duplicate client for SSE subscriptions (must not share with publish connection).
+    */
+   createSubscriberClient(): ReturnType<RedisClientType['duplicate']> {
+      return this.client.duplicate();
+   }
 }
 
 // Singleton instance

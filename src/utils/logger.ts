@@ -6,13 +6,14 @@ import { config } from '../config/env';
 
 const LOG_DIR = 'logs';
 
-type ServiceName = 'app' | 'rabbitmq' | 'redis' | 'email';
+type ServiceName = 'app' | 'rabbitmq' | 'redis' | 'email' | 'sse';
 
 const SERVICE_LOG_FILES: Record<ServiceName, string> = {
    app: 'app.log',
    rabbitmq: 'rabbitmq.log',
    redis: 'redis.log',
    email: 'email.log',
+   sse: 'sse.log',
 };
 
 function ensureLogDir(): string {
@@ -67,3 +68,4 @@ export const appLogger = createServiceLogger('app');
 export const rabbitmqLogger = createServiceLogger('rabbitmq');
 export const redisLogger = createServiceLogger('redis');
 export const emailLogger = createServiceLogger('email');
+export const sseLogger = createServiceLogger('sse');

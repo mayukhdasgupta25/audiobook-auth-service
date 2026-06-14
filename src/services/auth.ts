@@ -11,6 +11,7 @@ import { OAuthClientApp } from '../constants/oauthClientApp';
 import { isPartnerAppRole, isOrgAdminRole, isOrgCoordinatorRole, isGlobalAuthorRole } from '../constants/authRoles';
 import { AuthorService } from './AuthorService';
 import { OrganizationService } from './OrganizationService';
+import { emitCacheInvalidation } from './DomainEventPublisher';
 import { toUserResponse } from './userProfile';
 import {
    RegisterRequest,
@@ -214,6 +215,7 @@ export class AuthService {
                   ? { avatar: pendingAuthor.profileImage }
                   : {}),
             });
+            emitCacheInvalidation('author', 'created', author.id);
          } catch (error) {
             appLogger.error({ err: error }, 'Failed to publish author created event');
          } finally {
@@ -245,6 +247,7 @@ export class AuthService {
          await rabbitmqService.publishUserCreated({
             userId: updatedUser.id,
          });
+         emitCacheInvalidation('user', 'created', updatedUser.id);
       } catch (error) {
          appLogger.error({ err: error }, 'Failed to publish user created event');
       } finally {
@@ -676,6 +679,7 @@ export class AuthService {
             await rabbitmqService.publishUserCreated({
                userId: user.id,
             });
+            emitCacheInvalidation('user', 'created', user.id);
          } catch (error) {
             appLogger.error({ err: error }, 'Failed to publish user created event');
             // Don't fail registration if RabbitMQ publishing fails
