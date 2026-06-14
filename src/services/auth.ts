@@ -1,4 +1,4 @@
-import { PrismaClient, User, Role, UserType, OtpPurpose } from '@prisma/client';
+import { PrismaClient, User, Role, OtpPurpose } from '@prisma/client';
 import { PasswordUtils, TokenUtils } from '../utils/crypto';
 import { redisService } from './redis';
 import { rabbitmqService } from './rabbitmq';
@@ -6,6 +6,13 @@ import { googleOAuthService } from './google-oauth';
 import { otpService } from './otp';
 import { userDeviceService } from './userDevice';
 import { appLogger } from '../utils/logger';
+import { ClientType } from '../constants/clientType';
+import { OAuthClientApp } from '../constants/oauthClientApp';
+import { isPartnerAppRole, isOrgAdminRole, isOrgCoordinatorRole, isGlobalAuthorRole } from '../constants/authRoles';
+import { AuthorService } from './AuthorService';
+import { OrganizationService } from './OrganizationService';
+import { emitCacheInvalidation } from './DomainEventPublisher';
+import { toUserResponse } from './userProfile';
 import {
    RegisterRequest,
    LoginRequest,
@@ -38,9 +45,19 @@ export class AuthService {
     * Register a new user
     */
    async register(data: RegisterRequest): Promise<{ user: UserResponse; otpSent: boolean }> {
-      const { email, password, role, type = 'USER', firstName, lastName, address, contact } = data;
-      const userType = type === 'AUTHOR' ? UserType.AUTHOR : UserType.USER;
-      const userRole = type === 'AUTHOR' ? Role.AUTHOR : (role ?? Role.USER);
+      const {
+         email,
+         password,
+         role,
+         firstName,
+         lastName,
+         address,
+         contact,
+         avatar,
+         profileImage,
+      } = data;
+      const userRole = role ?? Role.LISTENER;
+      const isAuthor = userRole === Role.AUTHOR;
 
       // Check if user already exists
       const existingUser = await prisma.user.findUnique({
@@ -48,6 +65,11 @@ export class AuthService {
       });
 
       if (existingUser) {
+         if (existingUser.role === Role.LISTENER) {
+            throw new Error(
+               'This email is already registered as a listener account. Organization staff must use a separate email address.',
+            );
+         }
          throw new Error('User with this email already exists');
       }
 
@@ -60,17 +82,23 @@ export class AuthService {
             email: email.toLowerCase(),
             password: hashedPassword,
             role: userRole,
-            type: userType,
             emailVerified: false,
          },
       });
 
-      if (userType === UserType.AUTHOR) {
+      if (isAuthor) {
          await redisService.setPendingAuthorRegistration(user.id, {
             firstName: firstName!,
             lastName: lastName!,
             address: address!,
             ...(contact !== undefined ? { contact } : {}),
+            ...(profileImage !== undefined ? { profileImage } : {}),
+         });
+      } else {
+         await redisService.setPendingUserRegistration(user.id, {
+            address: address!,
+            contact: contact!,
+            ...(avatar !== undefined ? { avatar } : {}),
          });
       }
 
@@ -78,15 +106,17 @@ export class AuthService {
       try {
          await otpService.createOTP(user.id, OtpPurpose.REGISTRATION, user.email);
       } catch (error) {
-         if (userType === UserType.AUTHOR) {
+         if (isAuthor) {
             await redisService.deletePendingAuthorRegistration(user.id);
+         } else {
+            await redisService.deletePendingUserRegistration(user.id);
          }
          appLogger.error({ err: error }, 'Failed to create OTP');
          throw new Error('Failed to send OTP. Please try again.');
       }
 
       return {
-         user: this.toUserResponse(user),
+         user: toUserResponse(user),
          otpSent: true,
       };
    }
@@ -126,7 +156,9 @@ export class AuthService {
 
       this.assertAppAccess(user, app);
 
-      return this.issueAuthTokens(user, data.device, data.meta);
+      const appType = await this.resolveLoginAppType(user, data.slug);
+
+      return this.issueAuthTokens(user, data.device, data.meta, appType);
    }
 
    /**
@@ -150,41 +182,76 @@ export class AuthService {
       // Verify OTP
       await otpService.verifyOTP(user.id, otp, OtpPurpose.REGISTRATION);
 
-      // Update emailVerified to true after OTP verification
-      const updatedUser = await prisma.user.update({
-         where: { id: user.id },
-         data: { emailVerified: true },
-      });
-
-      const authResponse = await this.issueAuthTokens(updatedUser, data.device, data.meta);
-
-      if (updatedUser.type === UserType.AUTHOR) {
-         const pendingAuthor = await redisService.getPendingAuthorRegistration(updatedUser.id);
+      if (user.role === Role.AUTHOR) {
+         const pendingAuthor = await redisService.getPendingAuthorRegistration(user.id);
          if (!pendingAuthor) {
             throw new Error('Author registration data expired, please register again');
          }
 
-         try {
-            await rabbitmqService.publishAuthorCreated({
-               userId: updatedUser.id,
+         const updatedUser = await prisma.user.update({
+            where: { id: user.id },
+            data: {
+               emailVerified: true,
                firstName: pendingAuthor.firstName,
                lastName: pendingAuthor.lastName,
                address: pendingAuthor.address,
                ...(pendingAuthor.contact !== undefined ? { contact: pendingAuthor.contact } : {}),
+            },
+         });
+
+         const authorService = new AuthorService(prisma);
+         const author = await authorService.createAuthorForUser(
+            updatedUser.id,
+            pendingAuthor.firstName,
+            pendingAuthor.lastName,
+         );
+
+         const authResponse = await this.issueAuthTokens(updatedUser, data.device, data.meta);
+
+         try {
+            await rabbitmqService.publishAuthorCreated({
+               authorId: author.id,
+               ...(pendingAuthor.profileImage !== undefined
+                  ? { avatar: pendingAuthor.profileImage }
+                  : {}),
             });
+            emitCacheInvalidation('author', 'created', author.id);
          } catch (error) {
             appLogger.error({ err: error }, 'Failed to publish author created event');
          } finally {
             await redisService.deletePendingAuthorRegistration(updatedUser.id);
          }
-      } else {
-         // Publish user created event to RabbitMQ after OTP verification
-         try {
-            await rabbitmqService.publishUserCreated(updatedUser.id, firstName, lastName);
-         } catch (error) {
-            appLogger.error({ err: error }, 'Failed to publish user created event');
-            // Don't fail if RabbitMQ publishing fails, OTP is already verified
-         }
+
+         return authResponse;
+      }
+
+      const pendingUser = await redisService.getPendingUserRegistration(user.id);
+      if (!pendingUser) {
+         throw new Error('User registration data expired, please register again');
+      }
+
+      const updatedUser = await prisma.user.update({
+         where: { id: user.id },
+         data: {
+            emailVerified: true,
+            address: pendingUser.address,
+            contact: pendingUser.contact,
+            ...(firstName !== undefined && firstName.trim().length > 0 ? { firstName: firstName.trim() } : {}),
+            ...(lastName !== undefined && lastName.trim().length > 0 ? { lastName: lastName.trim() } : {}),
+         },
+      });
+
+      const authResponse = await this.issueAuthTokens(updatedUser, data.device, data.meta);
+
+      try {
+         await rabbitmqService.publishUserCreated({
+            userId: updatedUser.id,
+         });
+         emitCacheInvalidation('user', 'created', updatedUser.id);
+      } catch (error) {
+         appLogger.error({ err: error }, 'Failed to publish user created event');
+      } finally {
+         await redisService.deletePendingUserRegistration(updatedUser.id);
       }
 
       return authResponse;
@@ -205,7 +272,7 @@ export class AuthService {
       const loginData: LoginRequest & { meta?: DeviceRequestMeta } = {
          email,
          password,
-         clientType: 'mobile',
+         clientType: ClientType.MOBILE,
          device: data.device,
       };
       if (data.meta) {
@@ -588,29 +655,31 @@ export class AuthService {
       } else {
          // User doesn't exist - signup flow
          // Create new user with auto-verified email (Google already verified it)
-         user = await prisma.user.create({
-            data: {
-               email: googleUser.email,
-               password: null, // OAuth users don't have passwords
-               googleId: googleUser.googleId,
-               role: Role.USER,
-               emailVerified: googleUser.emailVerified, // Auto-verify since Google verified it
-            },
-         });
-
-         // Extract firstName and lastName from Google user's name
          let firstName: string | undefined;
          let lastName: string | undefined;
          if (googleUser.name) {
             const nameParts = googleUser.name.trim().split(/\s+/);
             firstName = nameParts[0] || undefined;
-            // All remaining words form the lastName
             lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : undefined;
          }
 
-         // Publish user created event to RabbitMQ with firstName and lastName
+         user = await prisma.user.create({
+            data: {
+               email: googleUser.email,
+               password: null, // OAuth users don't have passwords
+               googleId: googleUser.googleId,
+               role: Role.LISTENER,
+               emailVerified: googleUser.emailVerified, // Auto-verify since Google verified it
+               ...(firstName !== undefined ? { firstName } : {}),
+               ...(lastName !== undefined ? { lastName } : {}),
+            },
+         });
+
          try {
-            await rabbitmqService.publishUserCreated(user.id, firstName, lastName);
+            await rabbitmqService.publishUserCreated({
+               userId: user.id,
+            });
+            emitCacheInvalidation('user', 'created', user.id);
          } catch (error) {
             appLogger.error({ err: error }, 'Failed to publish user created event');
             // Don't fail registration if RabbitMQ publishing fails
@@ -632,38 +701,52 @@ export class AuthService {
          return null;
       }
 
-      return {
-         id: user.id,
-         email: user.email,
-         role: user.role,
-         type: user.type,
-         emailVerified: user.emailVerified,
-         createdAt: user.createdAt,
-         updatedAt: user.updatedAt,
-      };
-   }
-
-   private toUserResponse(user: User): UserResponse {
-      return {
-         id: user.id,
-         email: user.email,
-         role: user.role,
-         type: user.type,
-         emailVerified: user.emailVerified,
-         createdAt: user.createdAt,
-         updatedAt: user.updatedAt,
-      };
+      return toUserResponse(user);
    }
 
    /**
     * Restrict login/OAuth by client app.
     */
    private assertAppAccess(user: User, app?: string): void {
-      if (app === 'partner') {
-         if (user.role !== Role.ADMIN && user.role !== Role.AUTHOR) {
-            throw new Error('Access denied. Admin or author role required.');
-         }
+      if (app === OAuthClientApp.PARTNER && !isPartnerAppRole(user.role)) {
+         throw new Error(
+            'Access denied. Global admin, author, or organization staff role required.',
+         );
       }
+   }
+
+   private async resolveLoginAppType(
+      user: User,
+      slug?: string,
+   ): Promise<'organization' | 'author' | undefined> {
+      if (!slug || slug.trim().length === 0) {
+         return undefined;
+      }
+
+      const trimmedSlug = slug.trim();
+      const organizationService = new OrganizationService(prisma);
+      const authorService = new AuthorService(prisma);
+
+      if (isOrgAdminRole(user.role) || isOrgCoordinatorRole(user.role)) {
+         const isMember = await organizationService.isUserMemberOfOrganizationBySlug(
+            user.id,
+            trimmedSlug,
+         );
+         if (!isMember) {
+            throw new Error('You are not a member of this organization');
+         }
+         return 'organization';
+      }
+
+      if (isGlobalAuthorRole(user.role)) {
+         const author = await authorService.getAuthorBySlug(trimmedSlug);
+         if (!author || author.userId !== user.id) {
+            throw new Error('Invalid author credentials');
+         }
+         return 'author';
+      }
+
+      throw new Error('Invalid login slug for this account type');
    }
 
    /**
@@ -673,6 +756,7 @@ export class AuthService {
       user: User,
       device?: DeviceContext,
       meta?: DeviceRequestMeta,
+      appType?: 'organization' | 'author',
    ): Promise<AuthResponse> {
       const userDevice = device
          ? await userDeviceService.resolveDeviceForAuth(
@@ -701,6 +785,7 @@ export class AuthService {
       return {
          accessToken,
          refreshToken,
+         ...(appType !== undefined ? { appType } : {}),
          user: {
             id: user.id,
             email: user.email,

@@ -1,7 +1,12 @@
 import { Request, Response } from 'express';
-import { authController } from '../../src/controllers/auth';
 
 // Mock dependencies
+jest.mock('../../src/services/FileUrlService', () => ({
+   fileUrlService: {
+      processUploadedImageFile: jest.fn().mockResolvedValue('/uploads/images/authors/image-1.jpg'),
+   },
+}));
+
 jest.mock('../../src/services/auth', () => ({
    authService: {
       register: jest.fn(),
@@ -32,7 +37,10 @@ jest.mock('../../src/utils/crypto', () => ({
 }));
 
 // Import after mocks
+import { PrismaClient, Role } from '@prisma/client';
+import { authController } from '../../src/controllers/auth';
 import { authService } from '../../src/services/auth';
+import { fileUrlService } from '../../src/services/FileUrlService';
 import { redisService } from '../../src/services/redis';
 import { JWTUtils } from '../../src/utils/crypto';
 
@@ -92,6 +100,8 @@ describe('AuthController', () => {
    });
 
    describe('register', () => {
+      const validPassword = 'Password1!';
+
       test('should register successfully and return 201', async () => {
          const mockUser = { id: 'user-123', email: 'test@example.com' };
          (authService.register as jest.Mock).mockResolvedValue({
@@ -99,15 +109,22 @@ describe('AuthController', () => {
             otpSent: true,
          });
 
-         mockRequest.body = { email: 'test@example.com', password: 'password123' };
+         mockRequest.body = {
+            email: 'test@example.com',
+            password: validPassword,
+            confirmPassword: validPassword,
+            address: '456 Oak Ave',
+            contact: '+919123456789',
+         };
 
          await authController.register(mockRequest as Request, mockResponse as Response);
 
          expect(authService.register).toHaveBeenCalledWith({
             email: 'test@example.com',
-            password: 'password123',
-            role: 'USER',
-            type: 'USER',
+            password: validPassword,
+            role: 'LISTENER',
+            address: '456 Oak Ave',
+            contact: '+919123456789',
          });
          expect(mockStatus).toHaveBeenCalledWith(201);
          expect(mockJson).toHaveBeenCalledWith({
@@ -117,12 +134,15 @@ describe('AuthController', () => {
          });
       });
 
-      test('should reject invalid author registration payload', async () => {
+      test('should reject JSON author registration', async () => {
          mockRequest.body = {
-            type: 'AUTHOR',
+            role: 'AUTHOR',
             email: 'author@example.com',
-            password: 'password123',
+            password: validPassword,
+            confirmPassword: validPassword,
             firstName: 'Jane',
+            lastName: 'Doe',
+            address: '123 Main St',
          };
 
          await authController.register(mockRequest as Request, mockResponse as Response);
@@ -131,10 +151,52 @@ describe('AuthController', () => {
          expect(mockStatus).toHaveBeenCalledWith(400);
          expect(mockJson).toHaveBeenCalledWith(
             expect.objectContaining({
-               error: 'Author registration requires additional fields',
+               error: 'Author registration requires multipart/form-data',
                code: 'VALIDATION_ERROR',
             }),
          );
+      });
+
+      test('should register author from multipart payload with profile image', async () => {
+         const mockUser = { id: 'author-123', email: 'author@example.com' };
+         (authService.register as jest.Mock).mockResolvedValue({
+            user: mockUser,
+            otpSent: true,
+         });
+
+         mockRequest.headers = { 'content-type': 'multipart/form-data; boundary=test' };
+         mockRequest.body = {
+            role: 'AUTHOR',
+            email: 'author@example.com',
+            password: validPassword,
+            confirmPassword: validPassword,
+            firstName: 'Jane',
+            lastName: 'Doe',
+            address: '123 Main St',
+         };
+         (mockRequest as Request & { profileImageFile?: Express.Multer.File }).profileImageFile = {
+            path: './src/uploads/images/authors/image-1.jpg',
+            mimetype: 'image/jpeg',
+         } as Express.Multer.File;
+
+         await authController.register(mockRequest as Request, mockResponse as Response);
+
+         expect(fileUrlService.processUploadedImageFile).toHaveBeenCalledWith(
+            './src/uploads/images/authors/image-1.jpg',
+            'uploads/images/authors',
+            'image/jpeg',
+            'profile',
+         );
+         expect(authService.register).toHaveBeenCalledWith({
+            email: 'author@example.com',
+            password: validPassword,
+            role: 'AUTHOR',
+            firstName: 'Jane',
+            lastName: 'Doe',
+            address: '123 Main St',
+            profileImage: '/uploads/images/authors/image-1.jpg',
+         });
+         expect(mockStatus).toHaveBeenCalledWith(201);
       });
 
       test('should handle duplicate email and return 400', async () => {
@@ -142,7 +204,13 @@ describe('AuthController', () => {
             new Error('User with this email already exists')
          );
 
-         mockRequest.body = { email: 'existing@example.com', password: 'password123' };
+         mockRequest.body = {
+            email: 'existing@example.com',
+            password: validPassword,
+            confirmPassword: validPassword,
+            address: '456 Oak Ave',
+            contact: '+919123456789',
+         };
 
          await authController.register(mockRequest as Request, mockResponse as Response);
 
@@ -155,7 +223,13 @@ describe('AuthController', () => {
       test('should handle generic registration errors', async () => {
          (authService.register as jest.Mock).mockRejectedValue(new Error('Database error'));
 
-         mockRequest.body = { email: 'test@example.com', password: 'password123' };
+         mockRequest.body = {
+            email: 'test@example.com',
+            password: validPassword,
+            confirmPassword: validPassword,
+            address: '456 Oak Ave',
+            contact: '+919123456789',
+         };
 
          await authController.register(mockRequest as Request, mockResponse as Response);
 
@@ -263,6 +337,26 @@ describe('AuthController', () => {
    });
 
    describe('verifyRegistrationOTP', () => {
+      beforeEach(() => {
+         (PrismaClient as jest.Mock).mockImplementation(() => ({
+            user: {
+               findUnique: jest.fn().mockImplementation(({ where }: { where: { email: string } }) => {
+                  const email = where.email;
+                  if (email === 'author@example.com') {
+                     return Promise.resolve({ id: 'author-1', email, role: Role.AUTHOR });
+                  }
+                  if (email === 'org@example.com') {
+                     return Promise.resolve({ id: 'org-1', email, role: Role.ORG_ADMIN });
+                  }
+                  if (email === 'user@example.com') {
+                     return Promise.resolve({ id: 'user-1', email, role: Role.LISTENER });
+                  }
+                  return Promise.resolve(null);
+               }),
+            },
+         }));
+      });
+
       test('should allow author verification without device', async () => {
          const mockAuthResponse = {
             accessToken: 'access-token',

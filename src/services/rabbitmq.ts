@@ -50,6 +50,13 @@ export class RabbitMQService {
             rabbitmqLogger.info({ exchange: config.RABBITMQ_AUTHORS_EXCHANGE }, 'Authors exchange asserted');
          }
 
+         await this.channel.assertExchange(config.RABBITMQ_ORGANIZATIONS_EXCHANGE, 'topic', {
+            durable: true,
+         });
+         if (config.NODE_ENV !== 'test') {
+            rabbitmqLogger.info({ exchange: config.RABBITMQ_ORGANIZATIONS_EXCHANGE }, 'Organizations exchange asserted');
+         }
+
          this.isConnected = true;
 
          // Handle connection close
@@ -120,6 +127,7 @@ export class RabbitMQService {
       try {
          await this.channel.checkExchange(config.RABBITMQ_EXCHANGE);
          await this.channel.checkExchange(config.RABBITMQ_AUTHORS_EXCHANGE);
+         await this.channel.checkExchange(config.RABBITMQ_ORGANIZATIONS_EXCHANGE);
          return true;
       } catch {
          return false;
@@ -129,21 +137,13 @@ export class RabbitMQService {
    /**
     * Publish user created event
     */
-   async publishUserCreated(userId: string, firstName?: string, lastName?: string): Promise<void> {
+   async publishUserCreated(data: { userId: string }): Promise<void> {
       if (!this.isServiceConnected()) {
          throw new Error('RabbitMQ service is not connected');
       }
 
       try {
-         // Build message object, only including firstName and lastName if provided
-         const messageData: { userId: string; firstName?: string; lastName?: string } = { userId };
-         if (firstName !== undefined) {
-            messageData.firstName = firstName;
-         }
-         if (lastName !== undefined) {
-            messageData.lastName = lastName;
-         }
-         const message = JSON.stringify(messageData);
+         const message = JSON.stringify({ userId: data.userId });
          const routingKey = 'user.created';
 
          const published = this.channel!.publish(
@@ -161,11 +161,11 @@ export class RabbitMQService {
          }
 
          if (config.NODE_ENV !== 'test') {
-            rabbitmqLogger.info({ userId, routingKey }, 'Published user.created event');
+            rabbitmqLogger.info({ userId: data.userId, routingKey }, 'Published user.created event');
          }
       } catch (error) {
          if (config.NODE_ENV !== 'test') {
-            rabbitmqLogger.error({ err: error, userId }, 'Error publishing user created event');
+            rabbitmqLogger.error({ err: error, userId: data.userId }, 'Error publishing user created event');
          }
          throw error;
       }
@@ -174,33 +174,18 @@ export class RabbitMQService {
    /**
     * Publish author created event
     */
-   async publishAuthorCreated(data: {
-      userId: string;
-      firstName: string;
-      lastName: string;
-      address: string;
-      contact?: string;
-   }): Promise<void> {
+   async publishAuthorCreated(data: { authorId: string; avatar?: string }): Promise<void> {
       if (!this.isServiceConnected()) {
          throw new Error('RabbitMQ service is not connected');
       }
 
       try {
-         const messageData: {
-            userId: string;
-            firstName: string;
-            lastName: string;
-            address: string;
-            contact?: string;
-         } = {
-            userId: data.userId,
-            firstName: data.firstName,
-            lastName: data.lastName,
-            address: data.address,
+         const messageData: { authorId: string; avatar?: string } = {
+            authorId: data.authorId,
          };
 
-         if (data.contact !== undefined) {
-            messageData.contact = data.contact;
+         if (data.avatar !== undefined) {
+            messageData.avatar = data.avatar;
          }
 
          const message = JSON.stringify(messageData);
@@ -221,11 +206,127 @@ export class RabbitMQService {
          }
 
          if (config.NODE_ENV !== 'test') {
-            rabbitmqLogger.info({ userId: data.userId, routingKey }, 'Published author.created event');
+            rabbitmqLogger.info({ authorId: data.authorId, routingKey }, 'Published author.created event');
          }
       } catch (error) {
          if (config.NODE_ENV !== 'test') {
-            rabbitmqLogger.error({ err: error, userId: data.userId }, 'Error publishing author created event');
+            rabbitmqLogger.error({ err: error, authorId: data.authorId }, 'Error publishing author created event');
+         }
+         throw error;
+      }
+   }
+
+   /**
+    * Publish author deleted event
+    */
+   async publishAuthorDeleted(data: { authorId: string; userId: string }): Promise<void> {
+      if (!this.isServiceConnected()) {
+         throw new Error('RabbitMQ service is not connected');
+      }
+
+      try {
+         const message = JSON.stringify({ authorId: data.authorId, userId: data.userId });
+         const routingKey = 'author.deleted';
+
+         const published = this.channel!.publish(
+            config.RABBITMQ_AUTHORS_EXCHANGE,
+            routingKey,
+            Buffer.from(message),
+            {
+               persistent: true,
+               timestamp: Date.now(),
+            }
+         );
+
+         if (!published) {
+            throw new Error('Failed to publish message to RabbitMQ');
+         }
+
+         if (config.NODE_ENV !== 'test') {
+            rabbitmqLogger.info({ authorId: data.authorId, routingKey }, 'Published author.deleted event');
+         }
+      } catch (error) {
+         if (config.NODE_ENV !== 'test') {
+            rabbitmqLogger.error({ err: error, authorId: data.authorId }, 'Error publishing author deleted event');
+         }
+         throw error;
+      }
+   }
+
+   /**
+    * Publish organization deleted event
+    */
+   async publishOrganizationDeleted(data: { organizationId: string }): Promise<void> {
+      if (!this.isServiceConnected()) {
+         throw new Error('RabbitMQ service is not connected');
+      }
+
+      try {
+         const message = JSON.stringify({ organizationId: data.organizationId });
+         const routingKey = 'organization.deleted';
+
+         const published = this.channel!.publish(
+            config.RABBITMQ_ORGANIZATIONS_EXCHANGE,
+            routingKey,
+            Buffer.from(message),
+            {
+               persistent: true,
+               timestamp: Date.now(),
+            }
+         );
+
+         if (!published) {
+            throw new Error('Failed to publish message to RabbitMQ');
+         }
+
+         if (config.NODE_ENV !== 'test') {
+            rabbitmqLogger.info({ organizationId: data.organizationId, routingKey }, 'Published organization.deleted event');
+         }
+      } catch (error) {
+         if (config.NODE_ENV !== 'test') {
+            rabbitmqLogger.error({ err: error, organizationId: data.organizationId }, 'Error publishing organization deleted event');
+         }
+         throw error;
+      }
+   }
+
+   /**
+    * Publish user deleted event (stub for future user delete API)
+    */
+   async publishUserDeleted(data: { userId: string; authorId?: string }): Promise<void> {
+      if (!this.isServiceConnected()) {
+         throw new Error('RabbitMQ service is not connected');
+      }
+
+      try {
+         const messageData: { userId: string; authorId?: string } = { userId: data.userId };
+         if (data.authorId !== undefined) {
+            messageData.authorId = data.authorId;
+         }
+
+         const message = JSON.stringify(messageData);
+         const routingKey = 'user.deleted';
+
+         const published = this.channel!.publish(
+            config.RABBITMQ_EXCHANGE,
+            routingKey,
+            Buffer.from(message),
+            {
+               persistent: true,
+               timestamp: Date.now(),
+            }
+         );
+
+         if (!published) {
+            throw new Error('Failed to publish message to RabbitMQ');
+         }
+
+         if (config.NODE_ENV !== 'test') {
+            rabbitmqLogger.info({ userId: data.userId, routingKey }, 'Published user.deleted event');
+         }
+      } catch (error) {
+         if (config.NODE_ENV !== 'test') {
+            rabbitmqLogger.error({ err: error, userId: data.userId }, 'Error publishing user deleted event');
          }
          throw error;
       }

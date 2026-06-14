@@ -8,6 +8,7 @@ import {
 } from '../models/SubscriptionPlanDto';
 import { SubscriptionError } from '../types/subscription';
 import { subscriptionMessages } from '../utils/subscriptionMessages';
+import { emitCacheInvalidation } from './DomainEventPublisher';
 
 const msg = subscriptionMessages.error.subscription_plans;
 
@@ -39,6 +40,7 @@ export class SubscriptionPlanService {
                isActive: data.isActive ?? true,
             },
          });
+         emitCacheInvalidation('subscription-plan', 'created', created.id);
          return toSubscriptionPlanDto(created);
       } catch (error) {
          if (error instanceof SubscriptionError) throw error;
@@ -117,6 +119,7 @@ export class SubscriptionPlanService {
          }
          if (data.isActive !== undefined) updateData.isActive = data.isActive;
          const updated = await this.prisma.subscriptionPlan.update({ where: { id }, data: updateData });
+         emitCacheInvalidation('subscription-plan', 'updated', id);
          return toSubscriptionPlanDto(updated);
       } catch (error) {
          if (error instanceof SubscriptionError) throw error;
@@ -131,9 +134,11 @@ export class SubscriptionPlanService {
          const subscriptionsCount = await this.prisma.userSubscription.count({ where: { planId: id } });
          if (subscriptionsCount > 0) {
             await this.prisma.subscriptionPlan.update({ where: { id }, data: { isActive: false } });
+            emitCacheInvalidation('subscription-plan', 'updated', id);
             return { deleted: false, deactivated: true };
          }
          await this.prisma.subscriptionPlan.delete({ where: { id } });
+         emitCacheInvalidation('subscription-plan', 'deleted', id);
          return { deleted: true, deactivated: false };
       } catch (error) {
          if (error instanceof SubscriptionError) throw error;

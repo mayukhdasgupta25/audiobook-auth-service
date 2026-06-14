@@ -2,28 +2,37 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
+import path from 'path';
+import { PrismaClient } from '@prisma/client';
 import { config } from './config/env';
 import authRoutes from './routes/auth';
 import subscriptionPlanRoutes from './routes/subscriptionPlan';
 import userSubscriptionRoutes from './routes/userSubscription';
+import { createOrganizationRoutes } from './routes/organizationRoutes';
+import { createAuthorRoutes } from './routes/authorRoutes';
+import { createCatalogRoutes } from './routes/catalogRoutes';
+import { createDomainEventsRoutes } from './routes/domainEventsRoutes';
 import {
    errorHandler,
    notFound,
    requestLogger,
    corsOptions,
-   securityHeaders
+   securityHeaders,
+   authenticateToken,
 } from './middleware';
 import { redisService } from './services/redis';
 import { rabbitmqService } from './services/rabbitmq';
 import { getDependencyHealth, isDependencyHealthOk } from './services/health';
 import { requireHealthSupportAuth } from './middleware/healthSupportAuth';
 import { appLogger } from './utils/logger';
+import { setupSwagger } from './config/swagger';
 
 /**
  * Create and configure Express application
  */
 export const createApp = (): express.Application => {
    const app = express();
+   const prisma = new PrismaClient();
 
    // Express trust proxy hop count (see TRUST_PROXY in env). Required behind nginx for
    // express-rate-limit (X-Forwarded-For) and secure cookies over HTTPS.
@@ -46,6 +55,10 @@ export const createApp = (): express.Application => {
    // Request logging
    app.use(requestLogger);
 
+   if (config.NODE_ENV === 'development') {
+      app.use('/uploads', express.static(path.join(process.cwd(), 'src', 'uploads')));
+   }
+
    // Health check endpoint (database, Redis, RabbitMQ) — separate support auth
    app.get('/api/auth/health', requireHealthSupportAuth, async (_req, res) => {
       const checks = await getDependencyHealth();
@@ -64,12 +77,20 @@ export const createApp = (): express.Application => {
    app.use('/auth', authRoutes);
    app.use('/auth/subscription-plans', subscriptionPlanRoutes);
    app.use('/auth/subscriptions', userSubscriptionRoutes);
+   app.use('/auth/organizations', authenticateToken, createOrganizationRoutes(prisma));
+   app.use('/auth/authors', authenticateToken, createAuthorRoutes(prisma));
+   app.use('/auth/catalog', authenticateToken, createCatalogRoutes(prisma));
+   app.use('/auth/events', createDomainEventsRoutes());
+
+   setupSwagger(app);
 
    // Root endpoint
    app.get('/', (_req, res) => {
       res.json({
          message: 'Auth Service API',
          version: '1.0.0',
+         apiDocs: '/api-docs',
+         openApiSpec: '/api-docs.json',
          endpoints: {
             health: '/api/auth/health',
             auth: '/auth',
@@ -77,6 +98,10 @@ export const createApp = (): express.Application => {
             subscriptionPlans: '/auth/subscription-plans',
             subscriptions: '/auth/subscriptions',
             devices: '/auth/devices',
+            organizations: '/auth/organizations',
+            authors: '/auth/authors',
+            catalog: '/auth/catalog',
+            events: '/auth/events/stream',
          },
       });
    });
@@ -150,6 +175,7 @@ export const startServer = async (): Promise<void> => {
       const port = config.PORT;
       app.listen(port, () => {
          appLogger.info({ port, nodeEnv: config.NODE_ENV }, 'Auth service running');
+         appLogger.info({ swaggerUI: `http://localhost:${port}/api-docs`, openAPISpec: `http://localhost:${port}/api-docs.json` }, 'API documentation');
          const jwksPath = '/auth/.well-known/jwks.json';
          if (config.NODE_ENV === 'development' || config.NODE_ENV === 'test' || config.NODE_ENV === 'testing') {
             appLogger.info({ jwksUrl: `http://localhost:${port}${jwksPath}` }, 'JWKS endpoint');

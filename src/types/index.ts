@@ -1,4 +1,5 @@
-import { User, Role, UserType, OtpPurpose, EmailType } from '@prisma/client';
+import { User, Role, OtpPurpose, EmailType, Gender } from '@prisma/client';
+import { ClientTypeValue } from '../constants/clientType';
 
 // JWT Payload interface
 export interface JWTPayload {
@@ -36,12 +37,20 @@ export interface JWKS {
 export interface RegisterRequest {
    email: string;
    password: string;
+   confirmPassword?: string;
    role?: Role;
-   type?: 'USER' | 'AUTHOR';
    firstName?: string;
    lastName?: string;
    address?: string;
    contact?: string;
+   profileImage?: string;
+   avatar?: string;
+}
+
+export interface PendingUserRegistration {
+   address: string;
+   contact: string;
+   avatar?: string;
 }
 
 export interface PendingAuthorRegistration {
@@ -49,14 +58,17 @@ export interface PendingAuthorRegistration {
    lastName: string;
    address: string;
    contact?: string;
+   profileImage?: string;
+}
+
+export interface UserCreatedEvent {
+   userId: string;
+   avatar?: string;
 }
 
 export interface AuthorCreatedEvent {
-   userId: string;
-   firstName: string;
-   lastName: string;
-   address: string;
-   contact?: string;
+   authorId: string;
+   avatar?: string;
 }
 
 export interface DeviceContext {
@@ -73,8 +85,9 @@ export interface DeviceRequestMeta {
 export interface LoginRequest {
    email: string;
    password: string;
-   clientType?: 'browser' | 'mobile';
+   clientType?: ClientTypeValue;
    app?: string;
+   slug?: string;
    device: DeviceContext;
 }
 
@@ -101,7 +114,7 @@ export interface RevokeTokenRequest {
 
 export interface GoogleOAuthRequest {
    token: string;
-   clientType?: 'browser' | 'mobile';
+   clientType?: ClientTypeValue;
    app?: string;
    device: DeviceContext;
 }
@@ -110,6 +123,7 @@ export interface GoogleOAuthRequest {
 export interface AuthResponse {
    accessToken: string;
    refreshToken?: string; // Only for mobile clients
+   appType?: 'organization' | 'author';
    user: {
       id: string;
       email: string;
@@ -122,10 +136,31 @@ export interface UserResponse {
    id: string;
    email: string;
    role: Role;
-   type: UserType;
    emailVerified: boolean;
+   firstName?: string;
+   lastName?: string;
+   address?: string;
+   contact?: string;
+   gender?: Gender;
+   location?: string;
+   age?: number;
    createdAt: Date;
    updatedAt: Date;
+}
+
+export interface LocationCoordinatesInput {
+   latitude: string | number;
+   longitude: string | number;
+}
+
+export interface UpdateUserProfileRequest {
+   firstName?: string;
+   lastName?: string;
+   address?: string | null;
+   contact?: string | null;
+   gender?: Gender | null;
+   location?: LocationCoordinatesInput | null;
+   age?: number | null;
 }
 
 // Error classes
@@ -214,7 +249,7 @@ export interface PasswordResetData {
 }
 
 // OTP interfaces
-export { OtpPurpose, EmailType, UserType };
+export { OtpPurpose, EmailType };
 
 export interface VerifyOTPRequest {
    email: string;

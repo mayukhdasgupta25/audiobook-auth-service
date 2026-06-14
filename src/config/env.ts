@@ -1,4 +1,5 @@
 import dotenv from "dotenv";
+import fs from "fs";
 import path from "path";
 
 const LOCALHOST_PATTERN = /localhost|127\.0\.0\.1/i;
@@ -16,11 +17,20 @@ function getEnvFileForBootstrap(): string | null {
    return ENV_FILE_BY_NODE_ENV[bootstrapEnv] ?? `.env.${bootstrapEnv}`;
 }
 
+function loadEnvFile(filename: string, override = false): void {
+   const filePath = path.resolve(process.cwd(), filename);
+   if (fs.existsSync(filePath)) {
+      dotenv.config({ path: filePath, override });
+   }
+}
+
 function loadEnvFiles(): void {
+   loadEnvFile(".env");
    const envFile = getEnvFileForBootstrap();
    if (envFile) {
-      dotenv.config({ path: path.resolve(process.cwd(), envFile) });
+      loadEnvFile(envFile, true);
    }
+   loadEnvFile(".env.local", true);
 }
 
 function requireEnv(key: string): string {
@@ -110,6 +120,7 @@ export const config = {
    RABBITMQ_URL,
    RABBITMQ_EXCHANGE: requireEnv("RABBITMQ_EXCHANGE"),
    RABBITMQ_AUTHORS_EXCHANGE: requireEnv("RABBITMQ_AUTHORS_EXCHANGE"),
+   RABBITMQ_ORGANIZATIONS_EXCHANGE: requireEnv("RABBITMQ_ORGANIZATIONS_EXCHANGE"),
 
    JWT_PRIVATE_KEY: requireEnv("JWT_PRIVATE_KEY"),
    JWT_PUBLIC_KEY: requireEnv("JWT_PUBLIC_KEY"),
@@ -131,6 +142,23 @@ export const config = {
 
    LOG_LEVEL: requireEnv("LOG_LEVEL"),
 
+   MAX_FILE_SIZE: requireIntEnv("MAX_FILE_SIZE"),
+   DEV_UPLOAD_DIR: nodeEnv === "development" ? "./src/uploads" : "./uploads",
+   DEV_USER_AVATAR_DIR: nodeEnv === "development" ? "./src/uploads/images/users" : "./uploads/images/users",
+   DEV_AUTHOR_IMAGE_DIR: nodeEnv === "development" ? "./src/uploads/images/authors" : "./uploads/images/authors",
+   DEV_ORG_IMAGE_DIR: nodeEnv === "development" ? "./src/uploads/images/organizations" : "./uploads/images/organizations",
+
+   AWS_S3_BUCKET: requireEnv("AWS_S3_BUCKET"),
+   AWS_S3_REGION: requireEnv("AWS_S3_REGION"),
+   AWS_ACCESS_KEY_ID: requireEnv("AWS_ACCESS_KEY_ID"),
+   AWS_SECRET_ACCESS_KEY: requireEnv("AWS_SECRET_ACCESS_KEY"),
+   AWS_S3_ENDPOINT: requireEnv("AWS_S3_ENDPOINT"),
+   AWS_SIGNED_URL_EXPIRES_IN: requireIntEnv("AWS_SIGNED_URL_EXPIRES_IN"),
+   FFMPEG_PATH: process.env["FFMPEG_PATH"] ?? "ffmpeg",
+
    HEALTH_SUPPORT_EMAIL,
    HEALTH_SUPPORT_PASSWORD,
+
+   NOMINATIM_BASE_URL: requireEnv('NOMINATIM_BASE_URL'),
+   NOMINATIM_USER_AGENT: requireEnv('NOMINATIM_USER_AGENT'),
 };

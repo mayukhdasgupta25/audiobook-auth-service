@@ -18,6 +18,8 @@ module.exports = [
         Buffer: "readonly",
         URL: "readonly",
         fetch: "readonly",
+        AbortController: "readonly",
+        AbortSignal: "readonly",
         __dirname: "readonly",
         __filename: "readonly",
         global: "readonly",

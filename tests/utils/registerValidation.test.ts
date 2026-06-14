@@ -2,66 +2,254 @@ import { Role } from '@prisma/client';
 import { validateRegisterRequest } from '../../src/utils/registerValidation';
 import { ValidationError } from '../../src/types';
 
+const VALID_PASSWORD = 'Password1!';
+
 describe('validateRegisterRequest', () => {
    test('should normalize regular user registration', () => {
       const result = validateRegisterRequest({
          email: 'user@example.com',
-         password: 'password123',
+         password: VALID_PASSWORD,
+         confirmPassword: VALID_PASSWORD,
+         address: '456 Oak Ave',
+         contact: '9876543210',
       });
 
       expect(result).toEqual({
          email: 'user@example.com',
-         password: 'password123',
-         role: Role.USER,
-         type: 'USER',
+         password: VALID_PASSWORD,
+         role: Role.LISTENER,
+         address: '456 Oak Ave',
+         contact: '+919876543210',
       });
    });
 
-   test('should validate and normalize author registration', () => {
-      const result = validateRegisterRequest({
-         type: 'AUTHOR',
-         email: 'author@example.com',
-         password: 'password123',
-         firstName: 'Jane',
-         lastName: 'Doe',
-         address: '123 Main St',
-         contact: '+1-555-0100',
-      });
+   test('should reject user registration without address and contact', () => {
+      expect(() =>
+         validateRegisterRequest({
+            email: 'user@example.com',
+            password: 'password123',
+         }),
+      ).toThrow(ValidationError);
+   });
+
+   test('should validate and normalize author registration from multipart', () => {
+      const result = validateRegisterRequest(
+         {
+            role: Role.AUTHOR,
+            email: 'author@example.com',
+            password: VALID_PASSWORD,
+            confirmPassword: VALID_PASSWORD,
+            firstName: 'Jane',
+            lastName: 'Doe',
+            address: '123 Main St',
+            contact: '9876543210',
+            profileImage: '/uploads/images/authors/image-1.jpg',
+         },
+         { isMultipart: true },
+      );
 
       expect(result).toEqual({
          email: 'author@example.com',
-         password: 'password123',
+         password: VALID_PASSWORD,
          role: Role.AUTHOR,
-         type: 'AUTHOR',
          firstName: 'Jane',
          lastName: 'Doe',
          address: '123 Main St',
-         contact: '+1-555-0100',
+         contact: '+919876543210',
+         profileImage: '/uploads/images/authors/image-1.jpg',
       });
    });
 
-   test('should force AUTHOR role for author registration', () => {
+   test('should reject GLOBAL_ADMIN on public registration', () => {
+      expect(() =>
+         validateRegisterRequest({
+            role: Role.GLOBAL_ADMIN,
+            email: 'admin@example.com',
+            password: VALID_PASSWORD,
+            confirmPassword: VALID_PASSWORD,
+            address: '123 Main St',
+            contact: '9876543210',
+         }),
+      ).toThrow(ValidationError);
+   });
+
+   test('should normalize ORG_ADMIN registration', () => {
       const result = validateRegisterRequest({
-         type: 'AUTHOR',
-         email: 'author@example.com',
-         password: 'password123',
-         role: Role.ADMIN,
-         firstName: 'Jane',
-         lastName: 'Doe',
-         address: '123 Main St',
+         role: Role.ORG_ADMIN,
+         email: 'org-admin@example.com',
+         password: VALID_PASSWORD,
+         confirmPassword: VALID_PASSWORD,
+         address: '456 Oak Ave',
+         contact: '9876543210',
       });
 
-      expect(result.role).toBe(Role.AUTHOR);
+      expect(result.role).toBe(Role.ORG_ADMIN);
+      expect(result.email).toBe('org-admin@example.com');
+   });
+
+   test('should normalize ORG_COORDINATOR registration', () => {
+      const result = validateRegisterRequest({
+         role: Role.ORG_COORDINATOR,
+         email: 'coordinator@example.com',
+         password: VALID_PASSWORD,
+         confirmPassword: VALID_PASSWORD,
+         address: '456 Oak Ave',
+         contact: '9876543210',
+      });
+
+      expect(result.role).toBe(Role.ORG_COORDINATOR);
    });
 
    test('should reject author registration without required fields', () => {
       expect(() =>
+         validateRegisterRequest(
+            {
+               role: Role.AUTHOR,
+               email: 'author@example.com',
+               password: VALID_PASSWORD,
+               confirmPassword: VALID_PASSWORD,
+               firstName: 'Jane',
+            },
+            { isMultipart: true },
+         ),
+      ).toThrow(ValidationError);
+   });
+
+   test('should reject JSON author registration', () => {
+      expect(() =>
          validateRegisterRequest({
-            type: 'AUTHOR',
+            role: Role.AUTHOR,
             email: 'author@example.com',
-            password: 'password123',
+            password: VALID_PASSWORD,
+            confirmPassword: VALID_PASSWORD,
             firstName: 'Jane',
+            lastName: 'Doe',
+            address: '123 Main St',
          }),
       ).toThrow(ValidationError);
+   });
+
+   test('should reject multipart user registration', () => {
+      expect(() =>
+         validateRegisterRequest(
+            {
+               email: 'user@example.com',
+               password: VALID_PASSWORD,
+               confirmPassword: VALID_PASSWORD,
+            },
+            { isMultipart: true },
+         ),
+      ).toThrow(ValidationError);
+   });
+
+   test('should reject password shorter than 8 characters', () => {
+      expect(() =>
+         validateRegisterRequest({
+            email: 'user@example.com',
+            password: 'Pass1!',
+            confirmPassword: 'Pass1!',
+         }),
+      ).toThrow(ValidationError);
+   });
+
+   test('should reject password without uppercase letter', () => {
+      expect(() =>
+         validateRegisterRequest({
+            email: 'user@example.com',
+            password: 'password1!',
+            confirmPassword: 'password1!',
+         }),
+      ).toThrow(ValidationError);
+   });
+
+   test('should reject password without letter or digit', () => {
+      expect(() =>
+         validateRegisterRequest({
+            email: 'user@example.com',
+            password: 'PASSWORD!!!',
+            confirmPassword: 'PASSWORD!!!',
+         }),
+      ).toThrow(ValidationError);
+   });
+
+   test('should reject password without symbol', () => {
+      expect(() =>
+         validateRegisterRequest({
+            email: 'user@example.com',
+            password: 'Password1',
+            confirmPassword: 'Password1',
+         }),
+      ).toThrow(ValidationError);
+   });
+
+   test('should reject missing confirmPassword', () => {
+      try {
+         validateRegisterRequest({
+            email: 'user@example.com',
+            password: VALID_PASSWORD,
+         });
+         fail('Expected ValidationError');
+      } catch (error) {
+         expect(error).toBeInstanceOf(ValidationError);
+         expect((error as ValidationError).details['confirmPassword']).toContain('Confirm password is required');
+      }
+   });
+
+   test('should reject invalid Indian contact for user registration', () => {
+      try {
+         validateRegisterRequest({
+            email: 'user@example.com',
+            password: VALID_PASSWORD,
+            confirmPassword: VALID_PASSWORD,
+            address: '456 Oak Ave',
+            contact: '+1-555-0200',
+         });
+         fail('Expected ValidationError');
+      } catch (error) {
+         expect(error).toBeInstanceOf(ValidationError);
+         expect((error as ValidationError).details['contact']).toContain(
+            'Contact must be a valid Indian phone number',
+         );
+      }
+   });
+
+   test('should reject invalid Indian contact for author registration', () => {
+      try {
+         validateRegisterRequest(
+            {
+               role: Role.AUTHOR,
+               email: 'author@example.com',
+               password: VALID_PASSWORD,
+               confirmPassword: VALID_PASSWORD,
+               firstName: 'Jane',
+               lastName: 'Doe',
+               address: '123 Main St',
+               contact: '12345',
+            },
+            { isMultipart: true },
+         );
+         fail('Expected ValidationError');
+      } catch (error) {
+         expect(error).toBeInstanceOf(ValidationError);
+         expect((error as ValidationError).details['contact']).toContain(
+            'Contact must be a valid Indian phone number',
+         );
+      }
+   });
+
+   test('should reject mismatched confirmPassword', () => {
+      try {
+         validateRegisterRequest({
+            email: 'user@example.com',
+            password: VALID_PASSWORD,
+            confirmPassword: 'Password2!',
+         });
+         fail('Expected ValidationError');
+      } catch (error) {
+         expect(error).toBeInstanceOf(ValidationError);
+         expect((error as ValidationError).details['confirmPassword']).toContain(
+            'Password and confirm password do not match',
+         );
+      }
    });
 });

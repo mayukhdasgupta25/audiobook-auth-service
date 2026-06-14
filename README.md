@@ -9,13 +9,22 @@ A secure authentication service built with Node.js, Express, TypeScript, and Pri
 - **PKCE Support**: OAuth 2.0 PKCE flow for mobile clients
 - **Email Verification**: Secure email verification with tokens
 - **Password Reset**: Secure password reset flow
-- **Role-Based Access Control**: USER and ADMIN roles
+- **Role-Based Access Control**: LISTENER, AUTHOR, GLOBAL_ADMIN, ORG_ADMIN, and ORG_COORDINATOR roles
 - **Redis Blocklist**: Token revocation and emergency revoke
 - **JWKS Endpoint**: Public key endpoint for JWT verification
 - **Rate Limiting**: Protection against brute force attacks
 - **Security Headers**: Helmet.js and custom security middleware
 - **TypeScript**: Full type safety throughout the application
 - **Subscriptions**: Plan catalog and per-user subscriptions; see [docs/SUBSCRIPTIONS.md](./docs/SUBSCRIPTIONS.md)
+
+## API documentation
+
+When the service is running:
+
+- **Swagger UI**: `http://localhost:{PORT}/api-docs` — interactive API documentation
+- **OpenAPI spec**: `http://localhost:{PORT}/api-docs.json` — machine-readable specification
+
+The root `GET /` response also lists `apiDocs` and `openApiSpec` paths.
 
 ## Architecture
 
@@ -191,6 +200,7 @@ Logs are written under `logs/` (created at startup, gitignored). Each file only 
 | `rabbitmq.log` | RabbitMQ connection and publish events                                 |
 | `redis.log`    | Redis client, token revocation, PKCE, JWKS cache in Redis              |
 | `email.log`    | OTP/email send and email logging                                       |
+| `sse.log`      | SSE cache-invalidation events (published and forwarded to clients)     |
 
 Logging uses [Pino](https://getpino.io/) ([`src/utils/logger.ts`](src/utils/logger.ts)). Level is controlled by `LOG_LEVEL` in your env file. In `development` and `testing`, logs also print to the console (pretty-printed). Jest (`NODE_ENV=test`) uses silent loggers so no files are written during `npm test`.
 
@@ -303,15 +313,55 @@ Response sets an `httpOnly` `csrfToken` cookie and returns the same value in JSO
 
 #### Register User
 
+Registration uses `multipart/form-data`. Text fields are sent as form fields; images are optional file uploads.
+
+**LISTENER registration** (JSON body; required: `email`, `password`, `address`, `contact`; optional: `firstName`, `lastName`, `avatar`):
+
 ```http
 POST /auth/register
 Content-Type: application/json
 
 {
   "email": "user@example.com",
-  "password": "securePassword123"
+  "password": "securePassword123",
+  "role": "LISTENER",
+  "address": "456 Oak Ave",
+  "contact": "+91-9876543210"
 }
 ```
+
+**ORG_ADMIN / ORG_COORDINATOR registration** (same fields as LISTENER; must use a separate email from any existing listener account):
+
+```http
+POST /auth/register
+Content-Type: application/json
+
+{
+  "email": "org-admin@example.com",
+  "password": "securePassword123",
+  "role": "ORG_ADMIN",
+  "address": "456 Oak Ave",
+  "contact": "+91-9876543210"
+}
+```
+
+**AUTHOR registration** (required: `multipart/form-data` with `role=AUTHOR`, `firstName`, `lastName`, `address`; optional: `contact`, `profileImage` file):
+
+```http
+POST /auth/register
+Content-Type: multipart/form-data
+
+email=author@example.com
+password=securePassword123
+role=AUTHOR
+firstName=Jane
+lastName=Doe
+address=123 Main St
+contact=+91-9876543210
+profileImage=<optional image file>
+```
+
+After registration, verify OTP via `POST /auth/verify-registration-otp`. Device is **required** for `LISTENER` registrations and **optional** for `AUTHOR`, `ORG_ADMIN`, and `ORG_COORDINATOR`. LISTENER clients may pass optional `firstName` and `lastName` at OTP verification.
 
 #### Login (Browser)
 
@@ -461,7 +511,7 @@ Content-Type: application/json
 {
   "sub": "user-id",
   "email": "user@example.com",
-  "role": "USER",
+  "role": "LISTENER",
   "iat": 1640995200,
   "exp": 1640995800,
   "jti": "unique-token-id",
@@ -533,7 +583,7 @@ model User {
   id            String    @id @default(uuid())
   email         String    @unique
   password      String    // Hashed password
-  role          Role      @default(USER)
+  role          Role      @default(LISTENER)
   emailVerified Boolean   @default(false)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
@@ -606,7 +656,7 @@ The service includes:
 - Request logging with response times
 - Error logging with stack traces
 - Security event logging (token revocation, failed logins)
-- Health check at `GET /health` (database, Redis, RabbitMQ); returns `503` when any dependency is down
+- Health check at `GET /api/auth/health` (database, Redis, RabbitMQ); returns `503` when any dependency is down
 
 ## Deployment
 

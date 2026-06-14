@@ -58,3 +58,6 @@ junit.xml
 # Temporary files
 tmp/
 temp/
+
+# Local dev uploads
+src/uploads/

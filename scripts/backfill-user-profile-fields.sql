@@ -1,0 +1,33 @@
+-- One-time backfill: copy demographic fields from app user_profiles to auth users.
+-- Run against auth database AFTER auth migration adds columns, BEFORE app drops columns.
+--
+-- Prerequisites:
+--   1. Both databases reachable from your SQL client (or use dblink / ETL).
+--   2. app.user_profiles.userId matches auth.users.id
+--
+-- Example using psql with two connections (adjust connection strings):
+--   Export app profiles to CSV, then import — or run cross-db if on same Postgres instance:
+--
+-- UPDATE auth.users u
+-- SET
+--   "firstName" = p."firstName",
+--   "lastName" = p."lastName",
+--   address = p.address,
+--   contact = p.contact,
+--   gender = p.gender::text::"Gender",
+--   location = p.location,
+--   age = p.age,
+--   "updatedAt" = NOW()
+-- FROM app_schema.user_profiles p
+-- WHERE u.id = p."userId"
+--   AND (
+--     p."firstName" IS NOT NULL OR
+--     p."lastName" IS NOT NULL OR
+--     p.address IS NOT NULL OR
+--     p.contact IS NOT NULL OR
+--     p.gender IS NOT NULL OR
+--     p.location IS NOT NULL OR
+--     p.age IS NOT NULL
+--   );
+
+-- Replace app_schema with your app database schema name when running manually.

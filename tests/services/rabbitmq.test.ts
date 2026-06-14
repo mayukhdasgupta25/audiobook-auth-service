@@ -131,15 +131,17 @@ describe('RabbitMQService', () => {
       });
 
       test('should publish user created event', async () => {
-         const userId = 'user-123';
+         const data = {
+            userId: 'user-123',
+         };
          mockChannel.publish.mockReturnValueOnce(true);
 
-         await rabbitmqService.publishUserCreated(userId);
+         await rabbitmqService.publishUserCreated(data);
 
          expect(mockChannel.publish).toHaveBeenCalledWith(
             config.RABBITMQ_EXCHANGE,
             'user.created',
-            Buffer.from(JSON.stringify({ userId })),
+            Buffer.from(JSON.stringify(data)),
             expect.objectContaining({
                persistent: true,
                timestamp: expect.any(Number),
@@ -147,18 +149,18 @@ describe('RabbitMQService', () => {
          );
       });
 
-      test('should publish user created event with firstName and lastName', async () => {
-         const userId = 'user-123';
-         const firstName = 'John';
-         const lastName = 'Doe Smith';
+      test('should publish user created event with userId only', async () => {
+         const data = {
+            userId: 'user-123',
+         };
          mockChannel.publish.mockReturnValueOnce(true);
 
-         await rabbitmqService.publishUserCreated(userId, firstName, lastName);
+         await rabbitmqService.publishUserCreated(data);
 
          expect(mockChannel.publish).toHaveBeenCalledWith(
             config.RABBITMQ_EXCHANGE,
             'user.created',
-            Buffer.from(JSON.stringify({ userId, firstName, lastName })),
+            Buffer.from(JSON.stringify({ userId: 'user-123' })),
             expect.objectContaining({
                persistent: true,
                timestamp: expect.any(Number),
@@ -168,11 +170,27 @@ describe('RabbitMQService', () => {
 
       test('should publish author created event', async () => {
          const data = {
-            userId: 'author-user-123',
-            firstName: 'Jane',
-            lastName: 'Doe',
-            address: '123 Main St',
-            contact: '+1-555-0100',
+            authorId: 'author-123',
+         };
+         mockChannel.publish.mockReturnValueOnce(true);
+
+         await rabbitmqService.publishAuthorCreated(data);
+
+         expect(mockChannel.publish).toHaveBeenCalledWith(
+            config.RABBITMQ_AUTHORS_EXCHANGE,
+            'author.created',
+            Buffer.from(JSON.stringify(data)),
+            expect.objectContaining({
+               persistent: true,
+               timestamp: expect.any(Number),
+            })
+         );
+      });
+
+      test('should publish author created event with avatar', async () => {
+         const data = {
+            authorId: 'author-123',
+            avatar: '/uploads/images/authors/image-1.jpg',
          };
          mockChannel.publish.mockReturnValueOnce(true);
 
@@ -207,21 +225,75 @@ describe('RabbitMQService', () => {
          );
       });
 
+      test('should publish author deleted event', async () => {
+         const data = { authorId: 'author-123', userId: 'user-123' };
+         mockChannel.publish.mockReturnValueOnce(true);
+
+         await rabbitmqService.publishAuthorDeleted(data);
+
+         expect(mockChannel.publish).toHaveBeenCalledWith(
+            config.RABBITMQ_AUTHORS_EXCHANGE,
+            'author.deleted',
+            Buffer.from(JSON.stringify(data)),
+            expect.objectContaining({
+               persistent: true,
+               timestamp: expect.any(Number),
+            })
+         );
+      });
+
+      test('should publish organization deleted event', async () => {
+         const data = { organizationId: 'org-123' };
+         mockChannel.publish.mockReturnValueOnce(true);
+
+         await rabbitmqService.publishOrganizationDeleted(data);
+
+         expect(mockChannel.publish).toHaveBeenCalledWith(
+            config.RABBITMQ_ORGANIZATIONS_EXCHANGE,
+            'organization.deleted',
+            Buffer.from(JSON.stringify(data)),
+            expect.objectContaining({
+               persistent: true,
+               timestamp: expect.any(Number),
+            })
+         );
+      });
+
+      test('should publish user deleted event', async () => {
+         const data = { userId: 'user-123', authorId: 'author-123' };
+         mockChannel.publish.mockReturnValueOnce(true);
+
+         await rabbitmqService.publishUserDeleted(data);
+
+         expect(mockChannel.publish).toHaveBeenCalledWith(
+            config.RABBITMQ_EXCHANGE,
+            'user.deleted',
+            Buffer.from(JSON.stringify(data)),
+            expect.objectContaining({
+               persistent: true,
+               timestamp: expect.any(Number),
+            })
+         );
+      });
+
       test('should throw error if publish fails', async () => {
-         const userId = 'user-123';
          mockChannel.publish.mockReturnValueOnce(false);
 
-         await expect(rabbitmqService.publishUserCreated(userId)).rejects.toThrow(
-            'Failed to publish message to RabbitMQ'
-         );
+         await expect(
+            rabbitmqService.publishUserCreated({
+               userId: 'user-123',
+            }),
+         ).rejects.toThrow('Failed to publish message to RabbitMQ');
       });
 
       test('should throw error if not connected when publishing', async () => {
          (rabbitmqService as any).isConnected = false;
 
-         await expect(rabbitmqService.publishUserCreated('user-123')).rejects.toThrow(
-            'RabbitMQ service is not connected'
-         );
+         await expect(
+            rabbitmqService.publishUserCreated({
+               userId: 'user-123',
+            }),
+         ).rejects.toThrow('RabbitMQ service is not connected');
       });
    });
 });

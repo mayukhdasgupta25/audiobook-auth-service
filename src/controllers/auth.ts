@@ -6,6 +6,7 @@ import { redisService } from '../services/redis';
 import { otpService } from '../services/otp';
 import { JWTUtils } from '../utils/crypto';
 import { OtpPurpose } from '@prisma/client';
+import { ClientType } from '../constants/clientType';
 import {
    RegisterRequest,
    LoginRequest,
@@ -27,8 +28,10 @@ import {
 import {
    resolveDeviceContextForRegistrationVerify,
    validateDeviceContext,
+   validateLegacyRegistrationVerifyType,
 } from '../utils/deviceValidation';
 import { validateRegisterRequest } from '../utils/registerValidation';
+import { fileUrlService } from '../services/FileUrlService';
 import { getDeviceRequestMeta, handleAuthControllerError } from '../utils/authController';
 import { generateCsrfToken, getCsrfCookieOptions } from '../utils/csrf';
 import { ValidationError } from '../types';
@@ -63,7 +66,22 @@ export class AuthController {
     */
    async register(req: Request, res: Response): Promise<void> {
       try {
-         const data = validateRegisterRequest(req.body as RegisterRequest);
+         const registerBody = { ...req.body } as RegisterRequest;
+
+         const profileImageFile = (req as Request & { profileImageFile?: Express.Multer.File }).profileImageFile;
+
+         if (profileImageFile) {
+            registerBody.profileImage = await fileUrlService.processUploadedImageFile(
+               profileImageFile.path,
+               'uploads/images/authors',
+               profileImageFile.mimetype,
+               'profile',
+            );
+         }
+
+         const contentType = req.headers['content-type'] ?? '';
+         const isMultipart = contentType.startsWith('multipart/form-data');
+         const data = validateRegisterRequest(registerBody, { isMultipart });
          const result = await authService.register(data);
 
          res.status(201).json({
@@ -97,7 +115,7 @@ export class AuthController {
          const result = await authService.login({ ...data, meta: getDeviceRequestMeta(req) });
 
          // Set refresh token as httpOnly cookie for browser clients
-         if (data.clientType === 'browser' && result.refreshToken) {
+         if (data.clientType === ClientType.BROWSER && result.refreshToken) {
             res.cookie('refreshToken', result.refreshToken, getRefreshTokenCookieOptions());
 
             // Remove refresh token from response body for browser clients
@@ -118,7 +136,26 @@ export class AuthController {
     */
    async verifyRegistrationOTP(req: Request, res: Response): Promise<void> {
       try {
-         const device = resolveDeviceContextForRegistrationVerify(req.body.device, req.body.type);
+         const { email, type } = req.body as { email?: string; type?: string };
+
+         if (!email || typeof email !== 'string') {
+            res.status(400).json({ error: 'Email is required' });
+            return;
+         }
+
+         const { PrismaClient } = await import('@prisma/client');
+         const prisma = new PrismaClient();
+         const user = await prisma.user.findUnique({
+            where: { email: email.toLowerCase() },
+         });
+
+         if (!user) {
+            res.status(404).json({ error: 'User not found' });
+            return;
+         }
+
+         validateLegacyRegistrationVerifyType(type, user.role);
+         const device = resolveDeviceContextForRegistrationVerify(req.body.device, user.role);
          const data: VerifyOTPRequest = { ...req.body, device };
          const result = await authService.verifyRegistrationOTP({
             ...data,
@@ -215,7 +252,7 @@ export class AuthController {
          const result = await authService.googleOAuth({ ...data, meta: getDeviceRequestMeta(req) });
 
          // Set refresh token as httpOnly cookie for browser clients
-         if (data.clientType === 'browser' && result.refreshToken) {
+         if (data.clientType === ClientType.BROWSER && result.refreshToken) {
             res.cookie('refreshToken', result.refreshToken, getRefreshTokenCookieOptions());
 
             // Remove refresh token from response body for browser clients
@@ -520,7 +557,7 @@ export class AuthController {
             return;
          }
 
-         res.json({ role: user.role });
+         res.json({ role: user.role, email: user.email });
       } catch (error) {
          res.status(500).json({
             error: error instanceof Error ? error.message : 'Failed to get user role',

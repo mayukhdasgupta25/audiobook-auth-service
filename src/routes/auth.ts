@@ -4,13 +4,16 @@ import { jwksController } from '../controllers/jwks';
 import userDeviceRoutes from './userDevice';
 import {
    authenticateToken,
-   requireAdmin,
+   requireGlobalAdmin,
    loginRateLimit,
    passwordResetRateLimit,
    registerRateLimit,
    generalRateLimit,
    validateCsrf,
 } from '../middleware';
+import { handleAuthorRegistrationUpload } from '../middleware/RegisterUploadMiddleware';
+import { validateUserProfileUpdate } from '../middleware/profileValidation';
+import { userProfileController } from '../controllers/userProfile';
 
 const router = Router();
 
@@ -19,7 +22,12 @@ router.use(generalRateLimit);
 
 // Public routes
 router.get('/csrf-token', authController.getCsrfToken.bind(authController));
-router.post('/register', registerRateLimit, authController.register.bind(authController));
+router.post(
+   '/register',
+   registerRateLimit,
+   handleAuthorRegistrationUpload,
+   authController.register.bind(authController)
+);
 router.post('/login', loginRateLimit, validateCsrf, authController.login.bind(authController));
 router.post('/verify-registration-otp', loginRateLimit, authController.verifyRegistrationOTP.bind(authController));
 router.post('/resend-otp', loginRateLimit, authController.resendOTP.bind(authController));
@@ -40,6 +48,8 @@ router.use('/devices', userDeviceRoutes);
 
 // Protected routes (require authentication)
 router.get('/me', authenticateToken, authController.getMe.bind(authController));
+router.get('/user/profile', authenticateToken, userProfileController.getProfile.bind(userProfileController));
+router.put('/user/profile', authenticateToken, validateUserProfileUpdate, userProfileController.updateProfile.bind(userProfileController));
 router.get('/user/:userId', authenticateToken, authController.getRole.bind(authController));
 router.get('/request-password-change-otp', authenticateToken, authController.requestPasswordChangeOTP.bind(authController));
 router.post('/verify-password-change-otp', authenticateToken, authController.verifyPasswordChangeOTP.bind(authController));
@@ -49,7 +59,7 @@ router.post('/verify-email-update-otp', authenticateToken, authController.verify
 router.post('/update-email', authenticateToken, authController.updateEmail.bind(authController));
 
 // Admin only routes
-router.post('/revoke', authenticateToken, requireAdmin, authController.revokeToken.bind(authController));
-router.post('/emergency-revoke', authenticateToken, requireAdmin, authController.emergencyRevoke.bind(authController));
+router.post('/revoke', authenticateToken, requireGlobalAdmin, authController.revokeToken.bind(authController));
+router.post('/emergency-revoke', authenticateToken, requireGlobalAdmin, authController.emergencyRevoke.bind(authController));
 
 export default router;

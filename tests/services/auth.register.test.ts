@@ -1,4 +1,4 @@
-import { Role, UserType } from '@prisma/client';
+import { Role } from '@prisma/client';
 
 const mockPrisma = {
    user: {
@@ -13,10 +13,25 @@ const mockPrisma = {
 
 jest.mock('@prisma/client', () => ({
    PrismaClient: jest.fn(() => mockPrisma),
-   Role: { USER: 'USER', ADMIN: 'ADMIN', AUTHOR: 'AUTHOR' },
-   UserType: { USER: 'USER', AUTHOR: 'AUTHOR' },
+   Role: {
+      LISTENER: 'LISTENER',
+      GLOBAL_ADMIN: 'GLOBAL_ADMIN',
+      ORG_ADMIN: 'ORG_ADMIN',
+      ORG_COORDINATOR: 'ORG_COORDINATOR',
+      AUTHOR: 'AUTHOR',
+   },
    OtpPurpose: {
       REGISTRATION: 'REGISTRATION',
+   },
+   OrganizationRole: {
+      OWNER: 'OWNER',
+      ADMIN: 'ADMIN',
+   },
+   OrganizationTeamSize: {
+      SIZE_1_10: 'SIZE_1_10',
+      SIZE_11_50: 'SIZE_11_50',
+      SIZE_51_200: 'SIZE_51_200',
+      SIZE_200_PLUS: 'SIZE_200_PLUS',
    },
 }));
 
@@ -38,6 +53,9 @@ jest.mock('../../src/services/redis', () => ({
       setPendingAuthorRegistration: jest.fn().mockResolvedValue(undefined),
       getPendingAuthorRegistration: jest.fn(),
       deletePendingAuthorRegistration: jest.fn().mockResolvedValue(undefined),
+      setPendingUserRegistration: jest.fn().mockResolvedValue(undefined),
+      getPendingUserRegistration: jest.fn(),
+      deletePendingUserRegistration: jest.fn().mockResolvedValue(undefined),
    },
 }));
 
@@ -59,6 +77,16 @@ jest.mock('../../src/services/userDevice', () => ({
    userDeviceService: {
       resolveDeviceForAuth: jest.fn().mockResolvedValue({ id: 'device-1' }),
    },
+}));
+
+jest.mock('../../src/services/AuthorService', () => ({
+   AuthorService: jest.fn().mockImplementation(() => ({
+      createAuthorForUser: jest.fn().mockResolvedValue({
+         id: 'author-1',
+         userId: 'author-user-1',
+         slug: 'jane-doe-abc12345',
+      }),
+   })),
 }));
 
 jest.mock('../../src/services/google-oauth', () => ({
@@ -85,8 +113,7 @@ describe('AuthService register/verify author flow', () => {
       mockPrisma.user.create.mockResolvedValue({
          id: 'author-user-1',
          email: 'author@example.com',
-         role: Role.USER,
-         type: UserType.AUTHOR,
+         role: Role.AUTHOR,
          emailVerified: false,
          createdAt: new Date(),
          updatedAt: new Date(),
@@ -94,19 +121,48 @@ describe('AuthService register/verify author flow', () => {
 
       await authService.register({
          email: 'author@example.com',
-         password: 'password123',
-         type: 'AUTHOR',
+         password: 'Password1!',
+         role: Role.AUTHOR,
          firstName: 'Jane',
          lastName: 'Doe',
          address: '123 Main St',
-         contact: '+1-555-0100',
+         contact: '+919876543210',
       });
 
       expect(redisService.setPendingAuthorRegistration).toHaveBeenCalledWith('author-user-1', {
          firstName: 'Jane',
          lastName: 'Doe',
          address: '123 Main St',
-         contact: '+1-555-0100',
+         contact: '+919876543210',
+      });
+   });
+
+   test('should store profileImage in pending author metadata when provided', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue(null);
+      mockPrisma.user.create.mockResolvedValue({
+         id: 'author-user-1',
+         email: 'author@example.com',
+         role: Role.AUTHOR,
+         emailVerified: false,
+         createdAt: new Date(),
+         updatedAt: new Date(),
+      });
+
+      await authService.register({
+         email: 'author@example.com',
+         password: 'Password1!',
+         role: Role.AUTHOR,
+         firstName: 'Jane',
+         lastName: 'Doe',
+         address: '123 Main St',
+         profileImage: '/uploads/images/authors/image-1.jpg',
+      });
+
+      expect(redisService.setPendingAuthorRegistration).toHaveBeenCalledWith('author-user-1', {
+         firstName: 'Jane',
+         lastName: 'Doe',
+         address: '123 Main St',
+         profileImage: '/uploads/images/authors/image-1.jpg',
       });
    });
 
@@ -114,15 +170,13 @@ describe('AuthService register/verify author flow', () => {
       mockPrisma.user.findUnique.mockResolvedValue({
          id: 'author-user-1',
          email: 'author@example.com',
-         role: Role.USER,
-         type: UserType.AUTHOR,
+         role: Role.AUTHOR,
          emailVerified: false,
       });
       mockPrisma.user.update.mockResolvedValue({
          id: 'author-user-1',
          email: 'author@example.com',
-         role: Role.USER,
-         type: UserType.AUTHOR,
+         role: Role.AUTHOR,
          emailVerified: true,
       });
       mockPrisma.refreshToken.create.mockResolvedValue({});
@@ -131,7 +185,8 @@ describe('AuthService register/verify author flow', () => {
          firstName: 'Jane',
          lastName: 'Doe',
          address: '123 Main St',
-         contact: '+1-555-0100',
+         contact: '+919876543210',
+         profileImage: '/uploads/images/authors/image-1.jpg',
       });
 
       await authService.verifyRegistrationOTP({
@@ -141,11 +196,8 @@ describe('AuthService register/verify author flow', () => {
       });
 
       expect(rabbitmqService.publishAuthorCreated).toHaveBeenCalledWith({
-         userId: 'author-user-1',
-         firstName: 'Jane',
-         lastName: 'Doe',
-         address: '123 Main St',
-         contact: '+1-555-0100',
+         authorId: 'author-1',
+         avatar: '/uploads/images/authors/image-1.jpg',
       });
       expect(rabbitmqService.publishUserCreated).not.toHaveBeenCalled();
       expect(redisService.deletePendingAuthorRegistration).toHaveBeenCalledWith('author-user-1');
@@ -155,15 +207,13 @@ describe('AuthService register/verify author flow', () => {
       mockPrisma.user.findUnique.mockResolvedValue({
          id: 'author-user-1',
          email: 'author@example.com',
-         role: Role.USER,
-         type: UserType.AUTHOR,
+         role: Role.AUTHOR,
          emailVerified: false,
       });
       mockPrisma.user.update.mockResolvedValue({
          id: 'author-user-1',
          email: 'author@example.com',
-         role: Role.USER,
-         type: UserType.AUTHOR,
+         role: Role.AUTHOR,
          emailVerified: true,
       });
       mockPrisma.refreshToken.create.mockResolvedValue({});
@@ -192,18 +242,22 @@ describe('AuthService register/verify author flow', () => {
       mockPrisma.user.findUnique.mockResolvedValue({
          id: 'user-1',
          email: 'user@example.com',
-         role: Role.USER,
-         type: UserType.USER,
+         role: Role.LISTENER,
          emailVerified: false,
       });
       mockPrisma.user.update.mockResolvedValue({
          id: 'user-1',
          email: 'user@example.com',
-         role: Role.USER,
-         type: UserType.USER,
+         role: Role.LISTENER,
          emailVerified: true,
       });
       mockPrisma.refreshToken.create.mockResolvedValue({});
+
+      (redisService.getPendingUserRegistration as jest.Mock).mockResolvedValue({
+         address: '456 Oak Ave',
+         contact: '+919123456789',
+         avatar: 'uploads/images/users/avatar-1.jpg',
+      });
 
       await authService.verifyRegistrationOTP({
          email: 'user@example.com',
@@ -213,7 +267,22 @@ describe('AuthService register/verify author flow', () => {
          device: { deviceId: 'device-1' },
       });
 
-      expect(rabbitmqService.publishUserCreated).toHaveBeenCalledWith('user-1', 'John', 'Doe');
+      expect(mockPrisma.user.update).toHaveBeenCalledWith(
+         expect.objectContaining({
+            where: { id: 'user-1' },
+            data: expect.objectContaining({
+               emailVerified: true,
+               address: '456 Oak Ave',
+               contact: '+919123456789',
+               firstName: 'John',
+               lastName: 'Doe',
+            }),
+         }),
+      );
+      expect(rabbitmqService.publishUserCreated).toHaveBeenCalledWith({
+         userId: 'user-1',
+      });
       expect(rabbitmqService.publishAuthorCreated).not.toHaveBeenCalled();
+      expect(redisService.deletePendingUserRegistration).toHaveBeenCalledWith('user-1');
    });
 });

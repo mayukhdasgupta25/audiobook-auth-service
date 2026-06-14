@@ -11,9 +11,24 @@ const mockPrisma = {
 
 jest.mock('@prisma/client', () => ({
    PrismaClient: jest.fn(() => mockPrisma),
-   Role: { USER: 'USER', ADMIN: 'ADMIN', AUTHOR: 'AUTHOR' },
-   UserType: { USER: 'USER', AUTHOR: 'AUTHOR' },
+   Role: {
+      LISTENER: 'LISTENER',
+      GLOBAL_ADMIN: 'GLOBAL_ADMIN',
+      ORG_ADMIN: 'ORG_ADMIN',
+      ORG_COORDINATOR: 'ORG_COORDINATOR',
+      AUTHOR: 'AUTHOR',
+   },
    OtpPurpose: { REGISTRATION: 'REGISTRATION' },
+   OrganizationRole: {
+      OWNER: 'OWNER',
+      ADMIN: 'ADMIN',
+   },
+   OrganizationTeamSize: {
+      SIZE_1_10: 'SIZE_1_10',
+      SIZE_11_50: 'SIZE_11_50',
+      SIZE_51_200: 'SIZE_51_200',
+      SIZE_200_PLUS: 'SIZE_200_PLUS',
+   },
 }));
 
 jest.mock('../../src/utils/crypto', () => ({
@@ -62,7 +77,7 @@ describe('AuthService login app access', () => {
    test('should allow admin users for partner app', async () => {
       mockPrisma.user.findUnique.mockResolvedValue({
          ...verifiedUser,
-         role: Role.ADMIN,
+         role: Role.GLOBAL_ADMIN,
       });
 
       await expect(
@@ -103,7 +118,7 @@ describe('AuthService login app access', () => {
    test('should reject regular users for partner app', async () => {
       mockPrisma.user.findUnique.mockResolvedValue({
          ...verifiedUser,
-         role: Role.USER,
+         role: Role.LISTENER,
       });
 
       await expect(
@@ -113,7 +128,27 @@ describe('AuthService login app access', () => {
             app: 'partner',
             device: { deviceId: 'device-1' },
          }),
-      ).rejects.toThrow('Access denied. Admin or author role required.');
+      ).rejects.toThrow('Access denied. Global admin, author, or organization staff role required.');
+   });
+
+   test('should allow ORG_ADMIN users for partner app', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({
+         ...verifiedUser,
+         role: Role.ORG_ADMIN,
+      });
+
+      await expect(
+         authService.login({
+            email: 'org@example.com',
+            password: 'password123',
+            app: 'partner',
+            device: { deviceId: 'device-1' },
+         }),
+      ).resolves.toEqual(
+         expect.objectContaining({
+            accessToken: 'access-token',
+         }),
+      );
    });
 
 });
