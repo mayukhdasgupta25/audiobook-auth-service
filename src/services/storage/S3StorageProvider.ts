@@ -1,22 +1,26 @@
-import AWS from 'aws-sdk';
+import {
+   S3Client,
+   PutObjectCommand,
+   GetObjectCommand,
+   DeleteObjectCommand,
+   HeadObjectCommand,
+} from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { config } from '../../config/env';
 import { StorageProvider, StorageConfig } from './StorageProvider';
 
 export class S3StorageProvider implements StorageProvider {
-   private readonly s3: AWS.S3;
+   private readonly s3Client: S3Client;
    private readonly bucket: string;
 
    constructor(storageConfig?: Partial<StorageConfig>) {
-      const options: AWS.S3.ClientConfiguration = {
+      this.s3Client = new S3Client({
          region: config.AWS_S3_REGION,
-      };
-
-      if (config.AWS_S3_ENDPOINT) {
-         options.endpoint = config.AWS_S3_ENDPOINT;
-         options.s3ForcePathStyle = true;
-      }
-
-      this.s3 = new AWS.S3(options);
+         ...(config.AWS_S3_ENDPOINT && {
+            endpoint: config.AWS_S3_ENDPOINT,
+            forcePathStyle: true,
+         }),
+      });
       this.bucket = storageConfig?.bucket ?? config.AWS_S3_BUCKET;
    }
 
@@ -26,38 +30,39 @@ export class S3StorageProvider implements StorageProvider {
       contentType: string,
       metadata?: Record<string, string>,
    ): Promise<string> {
-      const uploadParams: AWS.S3.PutObjectRequest = {
+      const command = new PutObjectCommand({
          Bucket: this.bucket,
          Key: key,
          Body: buffer,
          ContentType: contentType,
-      };
+         ...(metadata && { Metadata: metadata }),
+      });
 
-      if (metadata) {
-         uploadParams.Metadata = metadata;
-      }
-
-      await this.s3.upload(uploadParams).promise();
+      await this.s3Client.send(command);
 
       return key.replace(/\\/g, '/');
    }
 
+   /**
+    * Presigns a GET URL using AWS SDK v3 (Signature Version 4 only).
+    */
    async getFileUrl(key: string, expiresIn = config.AWS_SIGNED_URL_EXPIRES_IN): Promise<string> {
-      return this.s3.getSignedUrl('getObject', {
+      const command = new GetObjectCommand({
          Bucket: this.bucket,
          Key: key,
-         Expires: expiresIn,
       });
+
+      return getSignedUrl(this.s3Client, command, { expiresIn });
    }
 
    async deleteFile(key: string): Promise<boolean> {
       try {
-         await this.s3
-            .deleteObject({
+         await this.s3Client.send(
+            new DeleteObjectCommand({
                Bucket: this.bucket,
                Key: key,
-            })
-            .promise();
+            }),
+         );
          return true;
       } catch {
          return false;
@@ -66,12 +71,12 @@ export class S3StorageProvider implements StorageProvider {
 
    async fileExists(key: string): Promise<boolean> {
       try {
-         await this.s3
-            .headObject({
+         await this.s3Client.send(
+            new HeadObjectCommand({
                Bucket: this.bucket,
                Key: key,
-            })
-            .promise();
+            }),
+         );
          return true;
       } catch {
          return false;
