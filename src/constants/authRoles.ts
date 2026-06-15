@@ -66,6 +66,11 @@ export function isDeviceOptionalForRole(role: string | undefined): boolean {
    return normalizeAuthRole(role) !== normalizeAuthRole(AuthRole.LISTENER);
 }
 
+/** Subscription device registration and removal quotas apply to LISTENER only. */
+export function isDeviceLimitEnforcedRole(role: string | undefined): boolean {
+   return normalizeAuthRole(role) === normalizeAuthRole(AuthRole.LISTENER);
+}
+
 export function isPartnerAppRole(role: string | undefined): boolean {
    const normalized = normalizeAuthRole(role);
    return AuthRoleGroups.PARTNER_APP.some(

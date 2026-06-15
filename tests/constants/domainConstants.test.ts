@@ -1,5 +1,6 @@
 import {
    AuthRole,
+   isDeviceLimitEnforcedRole,
    isDeviceOptionalForRole,
    isGlobalAdminRole,
    isOrgAdminRole,
@@ -63,6 +64,14 @@ describe('authRoles', () => {
          expect(isDeviceOptionalForRole(AuthRole.LISTENER)).toBe(false);
          expect(isDeviceOptionalForRole(AuthRole.AUTHOR)).toBe(true);
          expect(isDeviceOptionalForRole(AuthRole.ORG_ADMIN)).toBe(true);
+      });
+
+      test('isDeviceLimitEnforcedRole applies limits to LISTENER only', () => {
+         expect(isDeviceLimitEnforcedRole(AuthRole.LISTENER)).toBe(true);
+         expect(isDeviceLimitEnforcedRole(AuthRole.AUTHOR)).toBe(false);
+         expect(isDeviceLimitEnforcedRole(AuthRole.ORG_ADMIN)).toBe(false);
+         expect(isDeviceLimitEnforcedRole(AuthRole.ORG_COORDINATOR)).toBe(false);
+         expect(isDeviceLimitEnforcedRole(AuthRole.GLOBAL_ADMIN)).toBe(false);
       });
    });
 });

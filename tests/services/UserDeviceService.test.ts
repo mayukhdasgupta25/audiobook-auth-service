@@ -73,6 +73,18 @@ describe('UserDeviceService', () => {
       });
    });
 
+   describe('getDeviceLimitInfo', () => {
+      it('returns non-restrictive limits for non-LISTENER roles', async () => {
+         mockPrisma.userDevice.count.mockResolvedValue(2);
+
+         await expect(service.getDeviceLimitInfo('user-1', Role.AUTHOR)).resolves.toEqual({
+            maxDevices: 3,
+            registeredCount: 2,
+            remainingDeviceChanges: 3,
+         });
+      });
+   });
+
    describe('resolveDeviceForAuth', () => {
       const device = { deviceId: 'client-device-1' };
 
@@ -158,6 +170,46 @@ describe('UserDeviceService', () => {
             service.resolveDeviceForAuth('user-1', Role.LISTENER, { deviceId: 'd3' }),
          ).rejects.toBeInstanceOf(AuthError);
       });
+
+      it('allows AUTHOR to register beyond plan max device count', async () => {
+         mockPrisma.userSubscription.findFirst.mockResolvedValue({
+            plan: { id: 'plan', features: standardFeatures },
+         });
+         mockPrisma.userDevice.findUnique.mockResolvedValue(null);
+         mockPrisma.userDevice.count.mockResolvedValue(2);
+         mockPrisma.userDevice.create.mockResolvedValue({
+            id: 'row-3',
+            userId: 'user-1',
+            deviceId: 'd3',
+            deviceName: null,
+            platform: null,
+            lastSeenAt: new Date(),
+            createdAt: new Date(),
+         });
+
+         await service.resolveDeviceForAuth('user-1', Role.AUTHOR, { deviceId: 'd3' });
+         expect(mockPrisma.userDevice.create).toHaveBeenCalled();
+      });
+
+      it('allows ORG_ADMIN to register beyond plan max device count', async () => {
+         mockPrisma.userSubscription.findFirst.mockResolvedValue({
+            plan: { id: 'plan', features: standardFeatures },
+         });
+         mockPrisma.userDevice.findUnique.mockResolvedValue(null);
+         mockPrisma.userDevice.count.mockResolvedValue(2);
+         mockPrisma.userDevice.create.mockResolvedValue({
+            id: 'row-3',
+            userId: 'user-1',
+            deviceId: 'd3',
+            deviceName: null,
+            platform: null,
+            lastSeenAt: new Date(),
+            createdAt: new Date(),
+         });
+
+         await service.resolveDeviceForAuth('user-1', Role.ORG_ADMIN, { deviceId: 'd3' });
+         expect(mockPrisma.userDevice.create).toHaveBeenCalled();
+      });
    });
 
    describe('removeDevice', () => {
@@ -169,7 +221,7 @@ describe('UserDeviceService', () => {
          });
          mockPrisma.userDeviceChange.count.mockResolvedValue(0);
 
-         await service.removeDevice('user-1', 'dev-1');
+         await service.removeDevice('user-1', 'dev-1', Role.LISTENER);
 
          expect(mockPrisma.userDevice.delete).toHaveBeenCalledWith({ where: { id: 'dev-1' } });
       });
@@ -192,7 +244,7 @@ describe('UserDeviceService', () => {
             deviceId: 'client-1',
          });
 
-         await expect(service.removeDevice('user-1', 'dev-1')).rejects.toMatchObject({
+         await expect(service.removeDevice('user-1', 'dev-1', Role.LISTENER)).rejects.toMatchObject({
             code: 'DEVICE_CHANGES_NOT_ALLOWED',
          });
       });
@@ -208,7 +260,7 @@ describe('UserDeviceService', () => {
          });
          mockPrisma.userDeviceChange.count.mockResolvedValue(0);
 
-         await service.removeDevice('user-1', 'dev-1');
+         await service.removeDevice('user-1', 'dev-1', Role.LISTENER);
 
          expect(mockPrisma.refreshToken.updateMany).toHaveBeenCalledWith({
             where: { userDeviceId: 'dev-1', isRevoked: false },
@@ -234,9 +286,25 @@ describe('UserDeviceService', () => {
          });
          mockPrisma.userDeviceChange.count.mockResolvedValue(1);
 
-         await expect(service.removeDevice('user-1', 'dev-1')).rejects.toMatchObject({
+         await expect(service.removeDevice('user-1', 'dev-1', Role.LISTENER)).rejects.toMatchObject({
             code: 'DEVICE_CHANGE_QUOTA_EXCEEDED',
          });
+      });
+
+      it('allows AUTHOR to remove device when monthly quota exhausted', async () => {
+         mockPrisma.userSubscription.findFirst.mockResolvedValue({
+            plan: { id: 'plan', features: standardFeatures },
+         });
+         mockPrisma.userDevice.findFirst.mockResolvedValue({
+            id: 'dev-1',
+            userId: 'user-1',
+            deviceId: 'client-1',
+         });
+         mockPrisma.userDeviceChange.count.mockResolvedValue(1);
+
+         await service.removeDevice('user-1', 'dev-1', Role.AUTHOR);
+
+         expect(mockPrisma.userDevice.delete).toHaveBeenCalledWith({ where: { id: 'dev-1' } });
       });
    });
 
@@ -250,7 +318,11 @@ describe('UserDeviceService', () => {
       });
 
       it('does not send OTP when device is not owned by user', async () => {
-         mockPrisma.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'user@example.com' });
+         mockPrisma.user.findUnique.mockResolvedValue({
+            id: 'user-1',
+            email: 'user@example.com',
+            role: Role.LISTENER,
+         });
          mockPrisma.userDevice.findFirst.mockResolvedValue(null);
 
          await service.requestDeviceRemovalOtp('user@example.com', 'dev-1');
@@ -259,7 +331,11 @@ describe('UserDeviceService', () => {
       });
 
       it('sends OTP when user, device, and quota checks pass', async () => {
-         mockPrisma.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'user@example.com' });
+         mockPrisma.user.findUnique.mockResolvedValue({
+            id: 'user-1',
+            email: 'user@example.com',
+            role: Role.LISTENER,
+         });
          mockPrisma.userDevice.findFirst.mockResolvedValue({ id: 'dev-1', userId: 'user-1' });
          mockPrisma.userSubscription.findFirst.mockResolvedValue({
             plan: { id: 'plan', features: premiumFeatures },
@@ -278,7 +354,11 @@ describe('UserDeviceService', () => {
 
    describe('resendDeviceRemovalOtp', () => {
       it('rejects when no active OTP exists', async () => {
-         mockPrisma.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'user@example.com' });
+         mockPrisma.user.findUnique.mockResolvedValue({
+            id: 'user-1',
+            email: 'user@example.com',
+            role: Role.LISTENER,
+         });
          mockPrisma.userDevice.findFirst.mockResolvedValue({ id: 'dev-1', userId: 'user-1' });
          mockPrisma.userDeviceChange.count.mockResolvedValue(0);
          (otpService.getResendCooldownState as jest.Mock).mockResolvedValue({
@@ -292,7 +372,11 @@ describe('UserDeviceService', () => {
       });
 
       it('rejects when 30s cooldown has not elapsed', async () => {
-         mockPrisma.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'user@example.com' });
+         mockPrisma.user.findUnique.mockResolvedValue({
+            id: 'user-1',
+            email: 'user@example.com',
+            role: Role.LISTENER,
+         });
          mockPrisma.userDevice.findFirst.mockResolvedValue({ id: 'dev-1', userId: 'user-1' });
          mockPrisma.userDeviceChange.count.mockResolvedValue(0);
          (otpService.getResendCooldownState as jest.Mock).mockResolvedValue({
@@ -310,7 +394,11 @@ describe('UserDeviceService', () => {
       });
 
       it('sends new OTP when cooldown has elapsed', async () => {
-         mockPrisma.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'user@example.com' });
+         mockPrisma.user.findUnique.mockResolvedValue({
+            id: 'user-1',
+            email: 'user@example.com',
+            role: Role.LISTENER,
+         });
          mockPrisma.userDevice.findFirst.mockResolvedValue({ id: 'dev-1', userId: 'user-1' });
          mockPrisma.userDeviceChange.count.mockResolvedValue(0);
          (otpService.getResendCooldownState as jest.Mock).mockResolvedValue({
@@ -330,7 +418,11 @@ describe('UserDeviceService', () => {
 
    describe('removeDeviceWithOtp', () => {
       it('throws INVALID_OTP when verification fails', async () => {
-         mockPrisma.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'user@example.com' });
+         mockPrisma.user.findUnique.mockResolvedValue({
+            id: 'user-1',
+            email: 'user@example.com',
+            role: Role.LISTENER,
+         });
          (otpService.verifyOTP as jest.Mock).mockRejectedValue(new Error('Invalid OTP'));
 
          await expect(
@@ -339,7 +431,11 @@ describe('UserDeviceService', () => {
       });
 
       it('removes device after successful OTP verification', async () => {
-         mockPrisma.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'user@example.com' });
+         mockPrisma.user.findUnique.mockResolvedValue({
+            id: 'user-1',
+            email: 'user@example.com',
+            role: Role.LISTENER,
+         });
          (otpService.verifyOTP as jest.Mock).mockResolvedValue(true);
          mockPrisma.userSubscription.findFirst.mockResolvedValue({
             plan: { id: 'plan', features: premiumFeatures },
