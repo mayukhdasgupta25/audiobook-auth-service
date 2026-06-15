@@ -8,8 +8,15 @@ import {
 } from '@prisma/client';
 import { AuthError } from '../types';
 import type { DeviceContext, DeviceRequestMeta } from '../types';
+import { isDeviceLimitEnforcedRole } from '../constants/authRoles';
 import { emitCacheInvalidation } from './DomainEventPublisher';
-import { getCalendarMonthBounds, parsePlanFeatures, resolveDeviceChangesPerMonth, resolveMaxDevices } from '../utils/deviceLimits';
+import {
+   getCalendarMonthBounds,
+   parsePlanFeatures,
+   PLATFORM_MAX_DEVICES,
+   resolveDeviceChangesPerMonth,
+   resolveMaxDevices,
+} from '../utils/deviceLimits';
 import { otpService } from './otp';
 import { appLogger } from '../utils/logger';
 
@@ -50,10 +57,19 @@ export class UserDeviceService {
       return resolveMaxDevices(features);
    }
 
-   async getDeviceLimitInfo(userId: string): Promise<DeviceLimitInfo> {
-      const [maxDevices, registeredCount, remainingDeviceChanges] = await Promise.all([
+   async getDeviceLimitInfo(userId: string, role?: Role): Promise<DeviceLimitInfo> {
+      const registeredCount = await this.countDevices(userId);
+
+      if (role !== undefined && !isDeviceLimitEnforcedRole(role)) {
+         return {
+            maxDevices: PLATFORM_MAX_DEVICES,
+            registeredCount,
+            remainingDeviceChanges: PLATFORM_MAX_DEVICES,
+         };
+      }
+
+      const [maxDevices, remainingDeviceChanges] = await Promise.all([
          this.getMaxDevicesForUser(userId),
-         this.countDevices(userId),
          this.getRemainingDeviceChanges(userId),
       ]);
       return { maxDevices, registeredCount, remainingDeviceChanges };
@@ -72,7 +88,8 @@ export class UserDeviceService {
    }
 
    /**
-    * Register or touch a device during auth. Skipped for ADMIN users (returns null).
+    * Register or touch a device during auth. Skipped for GLOBAL_ADMIN (returns null).
+    * Max device count is enforced for LISTENER only.
     */
    async resolveDeviceForAuth(
       userId: string,
@@ -84,7 +101,6 @@ export class UserDeviceService {
          return null;
       }
 
-      const maxDevices = await this.getMaxDevicesForUser(userId);
       const existing = await this.prisma.userDevice.findUnique({
          where: { userId_deviceId: { userId, deviceId: device.deviceId } },
       });
@@ -102,15 +118,18 @@ export class UserDeviceService {
          });
       }
 
-      const currentCount = await this.countDevices(userId);
-      if (currentCount >= maxDevices) {
-         const registeredDevices = await this.listDevices(userId);
-         throw new AuthError(
-            'Device limit reached for your subscription plan',
-            403,
-            'DEVICE_LIMIT_EXCEEDED',
-            { maxDevices, registeredDevices },
-         );
+      if (isDeviceLimitEnforcedRole(role)) {
+         const maxDevices = await this.getMaxDevicesForUser(userId);
+         const currentCount = await this.countDevices(userId);
+         if (currentCount >= maxDevices) {
+            const registeredDevices = await this.listDevices(userId);
+            throw new AuthError(
+               'Device limit reached for your subscription plan',
+               403,
+               'DEVICE_LIMIT_EXCEEDED',
+               { maxDevices, registeredDevices },
+            );
+         }
       }
 
       return this.prisma.userDevice.create({
@@ -148,14 +167,14 @@ export class UserDeviceService {
       });
    }
 
-   async removeDevice(userId: string, deviceRowId: string): Promise<void> {
+   async removeDevice(userId: string, deviceRowId: string, role: Role): Promise<void> {
       const device = await this.findDeviceForUser(userId, deviceRowId);
 
       if (!device) {
          throw new AuthError('Device not found', 404, 'DEVICE_NOT_FOUND');
       }
 
-      await this.assertUserCanRemoveDevice(userId);
+      await this.assertUserCanRemoveDevice(userId, role);
 
       await this.prisma.$transaction(async (tx) => {
          await tx.refreshToken.updateMany({
@@ -194,7 +213,7 @@ export class UserDeviceService {
          return;
       }
 
-      const canRemove = await this.userCanRemoveDevice(user.id);
+      const canRemove = await this.userCanRemoveDevice(user.id, user.role);
       if (!canRemove) {
          return;
       }
@@ -223,7 +242,7 @@ export class UserDeviceService {
          throw new AuthError('Device not found', 404, 'DEVICE_NOT_FOUND');
       }
 
-      await this.assertUserCanRemoveDevice(user.id);
+      await this.assertUserCanRemoveDevice(user.id, user.role);
 
       const cooldown = await otpService.getResendCooldownState(
          user.id,
@@ -269,7 +288,7 @@ export class UserDeviceService {
          throw new AuthError(message, 400, 'INVALID_OTP');
       }
 
-      await this.removeDevice(user.id, deviceRowId);
+      await this.removeDevice(user.id, deviceRowId, user.role);
    }
 
    private async findDeviceForUser(userId: string, deviceRowId: string): Promise<UserDevice | null> {
@@ -278,7 +297,11 @@ export class UserDeviceService {
       });
    }
 
-   private async userCanRemoveDevice(userId: string): Promise<boolean> {
+   private async userCanRemoveDevice(userId: string, role: Role): Promise<boolean> {
+      if (!isDeviceLimitEnforcedRole(role)) {
+         return true;
+      }
+
       const deviceChangesPerMonth = await this.getDeviceChangesPerMonthForUser(userId);
       if (deviceChangesPerMonth === 0) {
          return false;
@@ -288,7 +311,11 @@ export class UserDeviceService {
       return remaining > 0;
    }
 
-   private async assertUserCanRemoveDevice(userId: string): Promise<void> {
+   private async assertUserCanRemoveDevice(userId: string, role: Role): Promise<void> {
+      if (!isDeviceLimitEnforcedRole(role)) {
+         return;
+      }
+
       const deviceChangesPerMonth = await this.getDeviceChangesPerMonthForUser(userId);
 
       if (deviceChangesPerMonth === 0) {

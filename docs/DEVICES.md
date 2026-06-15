@@ -1,6 +1,8 @@
 # Device tracking API (auth-service)
 
-Users are limited to a number of registered devices based on their subscription plan (`SubscriptionPlan.features.maxDevices`, capped at 3). Users without an active subscription may use **1** device.
+Users with the **LISTENER** role are limited to a number of registered devices based on their subscription plan (`SubscriptionPlan.features.maxDevices`, capped at 3). Listeners without an active subscription may use **1** device.
+
+**ORG_ADMIN**, **ORG_COORDINATOR**, **AUTHOR**, and **GLOBAL_ADMIN** are exempt from plan `maxDevices` and `deviceChangesPerMonth` enforcement. `GLOBAL_ADMIN` does not register devices at login.
 
 ## Client contract
 
@@ -130,6 +132,8 @@ Resend via `POST /auth/devices/resend-removal-otp` with the same `{ email, devic
 
 ## Plan limits (seed defaults)
 
+Applies to **LISTENER** accounts only.
+
 | Plan | maxDevices | deviceChangesPerMonth |
 |------|------------|------------------------|
 | No subscription | 1 | 1 |
@@ -141,7 +145,7 @@ Resend via `POST /auth/devices/resend-removal-otp` with the same `{ email, devic
 
 1. User signs in with `device.deviceId`.
 2. Server registers the device or updates `lastSeenAt` if known.
-3. If at limit and `deviceId` is new → `403 DEVICE_LIMIT_EXCEEDED` with `registeredDevices`.
+3. If LISTENER is at limit and `deviceId` is new → `403 DEVICE_LIMIT_EXCEEDED` with `registeredDevices`.
 4. User requests OTP for a device row id, then `DELETE /auth/devices/:id` with email + OTP.
 5. User signs in on the new device.
 6. Removing a device revokes all refresh tokens bound to that device.
