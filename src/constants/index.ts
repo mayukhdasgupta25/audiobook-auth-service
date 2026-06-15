@@ -1,6 +1,7 @@
 export {
    AuthRole,
    AuthRoleGroups,
+   isDeviceLimitEnforcedRole,
    isDeviceOptionalForRole,
    isGlobalAdminRole,
    isGlobalAuthorRole,

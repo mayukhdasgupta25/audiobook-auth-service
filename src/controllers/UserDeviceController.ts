@@ -39,14 +39,13 @@ export class UserDeviceController {
       try {
 
          const userId = this.getAuthUserId(req);
-
-
+         const authUser = (req as AuthenticatedRequest).user;
 
          const [devices, limits] = await Promise.all([
 
             userDeviceService.listDevices(userId),
 
-            userDeviceService.getDeviceLimitInfo(userId),
+            userDeviceService.getDeviceLimitInfo(userId, authUser?.role),
 
          ]);
 
